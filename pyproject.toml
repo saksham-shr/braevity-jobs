@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "braevity-jobs"
+version = "0.1.0"
+description = "CLI tool to monitor job posting across ATS platforms"
+requires-python = ">=3.10"
+
+dependencies = [
+    "click",
+    "aiohttp",
+    "openpyxl",
+    "pyyaml",
+]
+
+[project.scripts]
+braevity = "braevity.cli.commands:cli"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.optional-dependencies]
+dev = ["pytest"]        
