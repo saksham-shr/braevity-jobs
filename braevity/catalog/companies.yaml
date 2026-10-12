@@ -1,0 +1,23 @@
+greenhouse:
+  - name: Stripe
+    token: stripe
+  - name: Cloudflare
+    token: cloudflare
+  - name: GitLab
+    token: gitlab
+  - name: Razorpay
+    token: razorpay
+
+lever:
+  - name: Figma
+    org: figma
+  - name: Postman
+    org: postman
+
+workday:
+  - name: NVIDIA
+    url: https://nvidia.wd5.myworkdayjobs.com
+
+ashby:
+  - name: Linear
+    org: linear
