@@ -1,22 +1,24 @@
 import logging
+from aiohttp import ClientSession
 from braevity.core.models import Job
 from braevity.sources.base import BaseSource
 
 logger = logging.getLogger(__name__)
 
+ASHBY_API = "https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobBoardWithTeams"
+
 ASHBY_QUERY = """
-query ApiJobBoardWithTeams {
-    jobBoard {
-        teams {
-            name
-            jobs {
-                id
-                title
-                locationName
-                publishedAt
-            }
-        }
+query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
+  jobBoard: jobBoardWithTeams(
+    organizationHostedJobsPageName: $organizationHostedJobsPageName
+  ) {
+    jobPostings {
+      id
+      title
+      locationName
+      employmentType
     }
+  }
 }
 """
 
@@ -24,45 +26,51 @@ query ApiJobBoardWithTeams {
 class AshbySource(BaseSource):
     name = "ashby"
 
-    async def fetch_jobs(self, session, company) -> list[Job]:
-        org = company["org"]
-        url = "https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobBoardWithTeams"
-
+    async def fetch_jobs(self, session: ClientSession, company: dict) -> list[Job]:
+        org = company.get("org") or company.get("token", "")
         try:
             resp = await session.post(
-                url,
-                json={"operationName": "ApiJobBoardWithTeams", "query": ASHBY_QUERY},
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "apollographql-client-name": "non-user",
+                ASHBY_API,
+                json={
+                    "operationName": "ApiJobBoardWithTeams",
+                    "variables": {"organizationHostedJobsPageName": org},
+                    "query": ASHBY_QUERY,
                 },
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
             )
             if resp.status != 200:
-                logger.warning("Ashby %s returned %d", company["name"], resp.status)
+                logger.warning("Ashby %s returned %d", org, resp.status)
+                return []
+            if "json" not in resp.headers.get("Content-Type", ""):
+                logger.warning("Ashby %s returned non-JSON", org)
                 return []
             data = await resp.json()
         except Exception as e:
-            logger.warning("Ashby %s failed: %s", company["name"], e)
+            logger.warning("Ashby %s failed: %s", org, e)
             return []
 
         if data.get("errors"):
-            logger.warning("Ashby %s GraphQL errors: %s", company["name"], data["errors"])
+            logger.warning("Ashby %s GraphQL error: %s", org, data["errors"][0].get("message"))
             return []
 
-        jobs = []
-        teams = (data.get("data") or {}).get("jobBoard", {}).get("teams") or []
-        for team in teams:
-            for item in team.get("jobs", []):
-                job_id = item.get("id", "")
-                job_url = f"https://jobs.ashbyhq.com/{org}/{job_id}"
+        postings = (
+            data.get("data", {}).get("jobBoard", {}).get("jobPostings") or []
+        )
 
-                jobs.append(Job.from_fields(
-                    title=item.get("title", "Untitled"),
-                    company=company["name"],
-                    location=item.get("locationName"),
-                    url=job_url,
-                    posted_date=item.get("publishedAt"),
-                    source_ats=self.name,
-                ))
+        jobs = []
+        for posting in postings:
+            job_id = (posting.get("id") or "").strip()
+            if not job_id:
+                continue
+            job_url = f"https://jobs.ashbyhq.com/{org}/{job_id}"
+            location = (posting.get("locationName") or "").strip() or None
+
+            jobs.append(Job.from_fields(
+                title=(posting.get("title") or "").strip() or "Untitled",
+                company=company.get("name") or company.get("company_name") or org,
+                location=location,
+                url=job_url,
+                posted_date=None,
+                source=self.name,
+            ))
         return jobs
