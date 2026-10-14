@@ -1,23 +1,107 @@
 greenhouse:
-  - name: Stripe
-    token: stripe
-  - name: Cloudflare
-    token: cloudflare
-  - name: GitLab
-    token: gitlab
   - name: Razorpay
-    token: razorpay
+    board_token: razorpay
+  - name: CRED
+    board_token: cred
+  - name: PhonePe
+    board_token: phonepe
+  - name: Meesho
+    board_token: meesho
+  - name: Paytm
+    board_token: paytm
+  - name: Atlassian
+    board_token: atlassian
+  - name: Stripe
+    board_token: stripe
+  - name: Vercel
+    board_token: vercel
+  - name: Cloudflare
+    board_token: cloudflare
+  - name: GitLab
+    board_token: gitlab
+  - name: Datadog
+    board_token: datadoghq
+  - name: Snowflake
+    board_token: snowflake
+  - name: Databricks
+    board_token: databricks
+  - name: Notion
+    board_token: notion
+  - name: Asana
+    board_token: asana
+  - name: Twilio
+    board_token: twilio
+  - name: MongoDB
+    board_token: mongodb
+  - name: HashiCorp
+    board_token: hashicorp
+  - name: Confluent
+    board_token: confluent
+  - name: Mensa Brands
+    board_token: mensabrands
 
 lever:
-  - name: Figma
-    org: figma
+  - name: Zepto
+    org: zepto
+  - name: Swiggy
+    org: swiggy
   - name: Postman
     org: postman
+  - name: Figma
+    org: figma
+  - name: Unacademy
+    org: unacademy
+  - name: CoinSwitch
+    org: coinswitch
+  - name: Chargebee
+    org: chargebee
+  - name: "Curefit / cult.fit"
+    org: curefit
+  - name: Urban Company
+    org: urbancompany
+  - name: CoinDCX
+    org: coindcx
 
 workday:
+  - name: Microsoft
+    url: https://jobs.careers.microsoft.com
+  - name: Netflix
+    url: https://jobs.netflix.com
   - name: NVIDIA
     url: https://nvidia.wd5.myworkdayjobs.com
+  - name: Salesforce
+    url: https://salesforce.wd12.myworkdayjobs.com
+  - name: Adobe
+    url: https://adobe.wd5.myworkdayjobs.com
+  - name: Cisco
+    url: https://cisco.wd1.myworkdayjobs.com
+  - name: Intel
+    url: https://intel.wd1.myworkdayjobs.com
+  - name: Dell
+    url: https://dell.wd1.myworkdayjobs.com
+  - name: VMware
+    url: https://vmware.wd1.myworkdayjobs.com
+  - name: HP
+    url: https://hp.wd5.myworkdayjobs.com
+  - name: AMD
+    url: https://amd.wd1.myworkdayjobs.com
+  - name: Deloitte
+    url: https://deloitte.wd5.myworkdayjobs.com
+  - name: KPMG
+    url: https://kpmg.wd5.myworkdayjobs.com
+  - name: Accenture
+    url: https://accenture.wd3.myworkdayjobs.com
+  - name: Slack
+    url: https://salesforce.wd12.myworkdayjobs.com
+  - name: Elastic
+    url: https://elastic.wd3.myworkdayjobs.com
+  - name: Okta
+    url: https://okta.wd1.myworkdayjobs.com
 
 ashby:
   - name: Linear
     org: linear
+  - name: Setu
+    org: setu
+  - name: Plum
+    org: plum

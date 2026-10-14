@@ -1,0 +1,73 @@
+greenhouse:
+  - razorpay
+  - cred
+  - phonepe
+  - meesho
+  - paytm
+  - atlassian
+  - stripe
+  - vercel
+  - cloudflare
+  - gitlab
+  - datadoghq
+  - snowflake
+  - databricks
+  - notion
+  - asana
+  - twilio
+  - mongodb
+  - hashicorp
+  - confluent
+  - mensabrands
+  - airbnb
+  - coinbase
+  - doordash
+  - instacart
+  - gusto
+  - brex
+  - plaid
+  - airtable
+  - figma
+  - discord
+  - canva
+  - ramp
+
+lever:
+  - zepto
+  - swiggy
+  - postman
+  - figma
+  - unacademy
+  - coinswitch
+  - chargebee
+  - curefit
+  - urbancompany
+  - coindcx
+  - netflix
+  - nerdwallet
+  - lucidmotors
+
+ashby:
+  - linear
+  - setu
+  - plum
+  - ramp
+  - notion
+
+workday:
+  - microsoft:https://jobs.careers.microsoft.com
+  - netflix:https://jobs.netflix.com
+  - nvidia:https://nvidia.wd5.myworkdayjobs.com
+  - salesforce:https://salesforce.wd12.myworkdayjobs.com
+  - adobe:https://adobe.wd5.myworkdayjobs.com
+  - cisco:https://cisco.wd1.myworkdayjobs.com
+  - intel:https://intel.wd1.myworkdayjobs.com
+  - dell:https://dell.wd1.myworkdayjobs.com
+  - vmware:https://vmware.wd1.myworkdayjobs.com
+  - hp:https://hp.wd5.myworkdayjobs.com
+  - amd:https://amd.wd1.myworkdayjobs.com
+  - deloitte:https://deloitte.wd5.myworkdayjobs.com
+  - kpmg:https://kpmg.wd5.myworkdayjobs.com
+  - accenture:https://accenture.wd3.myworkdayjobs.com
+  - elastic:https://elastic.wd3.myworkdayjobs.com
+  - okta:https://okta.wd1.myworkdayjobs.com
