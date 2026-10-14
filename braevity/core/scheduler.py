@@ -7,6 +7,7 @@ from braevity.core.dedup import DedupStore
 from braevity.core.registry import BoardRegistry
 from braevity.core.filter import filter_jobs
 from braevity.core.exporter import export_jobs
+from braevity.core.toast import send_toast
 from braevity.core.migration import seed_registry, migrate_catalog
 from braevity.sources.crossref import discover_from_jobs
 from braevity.sources.greenhouse import GreenhouseSource
@@ -51,6 +52,14 @@ ATS_KEY_MAP = {
     "ashby": "org",
     "workday": "url",
 }
+
+
+def _notify(jobs: list[Job], role: str, config: dict) -> None:
+    if config.get("notification"):
+        from braevity.core.notifier import send_notification
+        send_notification(jobs, role, config["notification"])
+    else:
+        send_toast(jobs, role)
 
 
 def _board_to_company(board: dict) -> dict:
@@ -183,6 +192,7 @@ async def run_scheduler(config: dict) -> None:
             if filtered:
                 excel_path = config.get("excel_path", ".")
                 export_jobs(filtered, excel_path)
+                _notify(filtered, watch["role"], config)
                 total_new += len(filtered)
 
         if cycle_count % cycles_per_slow == 0:
@@ -192,6 +202,7 @@ async def run_scheduler(config: dict) -> None:
                 if filtered:
                     excel_path = config.get("excel_path", ".")
                     export_jobs(filtered, excel_path)
+                    _notify(filtered, watch["role"], config)
                     total_new += len(filtered)
             logger.info("Slow cycle complete.")
 

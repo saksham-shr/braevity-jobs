@@ -12,23 +12,29 @@ def cli():
 
 @cli.command()
 def init():
-    """Set up Braevity config (Excel path, email, SMTP)."""
+    """Set up Braevity config (Excel path, notifications)."""
     excel_path = click.prompt("Where should Excel files be saved?", default="./jobs")
-    email = click.prompt("Notification email")
-    smtp_host = click.prompt("SMTP host", default="smtp.gmail.com")
-    smtp_port = click.prompt("SMTP port", default=587, type=int)
-    smtp_user = click.prompt("SMTP user (email)")
-    smtp_password = click.prompt("SMTP password (app password)", hide_input=True)
 
     data = load_config()
     data["excel_path"] = excel_path
-    data["notification"] = {
-        "email": email,
-        "smtp_host": smtp_host,
-        "smtp_port": smtp_port,
-        "smtp_user": smtp_user,
-        "smtp_password": smtp_password,
-    }
+
+    use_smtp = click.confirm("Set up email notifications via SMTP?", default=False)
+    if use_smtp:
+        email = click.prompt("Notification email")
+        smtp_host = click.prompt("SMTP host", default="smtp.gmail.com")
+        smtp_port = click.prompt("SMTP port", default=587, type=int)
+        smtp_user = click.prompt("SMTP user (email)")
+        smtp_password = click.prompt("SMTP password (app password)", hide_input=True)
+        data["notification"] = {
+            "email": email,
+            "smtp_host": smtp_host,
+            "smtp_port": smtp_port,
+            "smtp_user": smtp_user,
+            "smtp_password": smtp_password,
+        }
+    else:
+        click.echo("Desktop toast notifications enabled (default).")
+
     data.setdefault("watches", [])
     save_config(data)
     click.echo(f"Config saved to {config_dir() / 'config.yaml'}")
