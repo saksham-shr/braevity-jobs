@@ -18,7 +18,7 @@ def test_init_watch_list_remove_flow(tmp_path, monkeypatch):
     monkeypatch.setenv("BRAEVITY_HOME", str(tmp_path / ".braevity"))
     runner = CliRunner()
 
-    r = runner.invoke(cli, ["init"], input="D:/Jobs\nu@g.com\nsmtp.gmail.com\n587\nu@g.com\npass\n")
+    r = runner.invoke(cli, ["init"], input="D:/Jobs\nN\n")
     assert r.exit_code == 0
 
     r = runner.invoke(cli, ["watch"], input="SDE\nany\nIndia\nBangalore\n30\n")

@@ -1,5 +1,6 @@
 import logging
 import smtplib
+from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from braevity.core.models import Job
@@ -11,9 +12,9 @@ def build_email_body(jobs: list[Job], role: str) -> str:
     rows = ""
     for j in jobs:
         rows += (
-            f"<tr><td>{j.title}</td><td>{j.company}</td>"
-            f"<td>{j.location or ''}</td><td>{j.posted_date or ''}</td>"
-            f'<td><a href="{j.url}">Apply</a></td></tr>\n'
+            f"<tr><td>{escape(j.title)}</td><td>{escape(j.company)}</td>"
+            f"<td>{escape(j.location or '')}</td><td>{escape(j.posted_date or '')}</td>"
+            f'<td><a href="{escape(j.url)}">Apply</a></td></tr>\n'
         )
     return (
         f"<h2>Braevity: {len(jobs)} new {role} postings</h2>"

@@ -19,6 +19,14 @@ def test_build_email_body_contains_jobs():
     assert "<table" in body
 
 
+def test_build_email_body_escapes_html():
+    jobs = [_job('<script>alert("xss")</script>', 'Acme & Co "LLC"')]
+    body = build_email_body(jobs, "SDE")
+    assert "<script>" not in body
+    assert "&lt;script&gt;" in body
+    assert "&amp; Co &quot;LLC&quot;" in body
+
+
 @patch("braevity.core.notifier.smtplib.SMTP")
 def test_send_notification_success(mock_smtp_cls):
     mock_smtp = MagicMock()
