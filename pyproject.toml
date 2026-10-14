@@ -1,18 +1,17 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "braevity-jobs"
+name = "braevity"
 version = "0.1.0"
-description = "CLI tool to monitor job posting across ATS platforms"
+description = "CLI job monitor for ATS platforms"
 requires-python = ">=3.10"
-
 dependencies = [
-    "click",
-    "aiohttp",
-    "openpyxl",
-    "pyyaml",
+    "click>=8.0",
+    "aiohttp>=3.9",
+    "openpyxl>=3.1",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -20,6 +19,3 @@ braevity = "braevity.cli.commands:cli"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[project.optional-dependencies]
-dev = ["pytest"]        

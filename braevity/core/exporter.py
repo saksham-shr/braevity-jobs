@@ -6,7 +6,11 @@ from braevity.core.models import Job
 
 logger = logging.getLogger(__name__)
 
-HEADERS = ["Title", "Company", "Location", "Posted Date", "URL", "Source", "Found At"]
+HEADERS = [
+    "Title", "Company", "Location", "Posted Date", "URL",
+    "Source", "Salary Min", "Salary Max", "Currency",
+    "Remote", "Type", "Tags", "Found At",
+]
 
 
 def export_jobs(jobs: list[Job], excel_dir: str) -> Path | None:
@@ -33,7 +37,6 @@ def export_jobs(jobs: list[Job], excel_dir: str) -> Path | None:
         ws.title = "Jobs"
         ws.append(HEADERS)
 
-    # Append job rows
     for job in jobs:
         ws.append([
             job.title,
@@ -41,11 +44,16 @@ def export_jobs(jobs: list[Job], excel_dir: str) -> Path | None:
             job.location or "",
             job.posted_date or "",
             job.url,
-            job.source_ats,
+            job.source,
+            job.salary_min or "",
+            job.salary_max or "",
+            job.salary_currency or "",
+            "Yes" if job.remote else "No",
+            job.employment_type or "",
+            ", ".join(job.tags) if job.tags else "",
             job.found_at,
         ])
 
-    # Try save, fallback to temp file
     try:
         wb.save(file_path)
         return file_path
