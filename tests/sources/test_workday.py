@@ -73,3 +73,22 @@ def test_workday_nonstandard_url_with_override():
     assert len(jobs) == 1
     call_url = session.post.call_args[0][0]
     assert "/wday/cxs/microsoft/microsoft/jobs" in call_url
+
+
+def test_workday_bare_token_no_crash():
+    """Cross-ref discovered boards store bare tokens like 'nvidia' (issue #10)."""
+    source = WorkdaySource()
+    page1 = {
+        "jobPostings": [
+            {"title": "GPU Engineer", "externalPath": "/job/456", "postedOn": "Today"},
+        ]
+    }
+    session = AsyncMock()
+    session.post = AsyncMock(return_value=_mock_response(page1))
+
+    company = {"name": "NVIDIA", "url": "nvidia"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert len(jobs) == 1
+    assert "nvidia" in jobs[0].url
+    call_url = session.post.call_args[0][0]
+    assert "nvidia.wd5.myworkdayjobs.com" in call_url

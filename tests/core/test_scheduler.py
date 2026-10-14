@@ -1,7 +1,8 @@
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
-from braevity.core.scheduler import run_fast_cycle
+from braevity.core.scheduler import run_fast_cycle, run_slow_cycle
 from braevity.core.models import Job
+from braevity.core.registry import BoardRegistry
 
 
 def _job(title="SDE", url="https://x.com/1"):
@@ -26,3 +27,28 @@ def test_fast_cycle_fetches_aggregators(mock_discover, mock_aggs, tmp_path):
     assert count == 1
     assert len(jobs) == 1
     fake_agg.fetch_all_jobs.assert_awaited_once()
+
+
+def test_slow_cycle_empty_results_not_failure(tmp_path):
+    """Empty job results should not deactivate boards (issue #9)."""
+    db_path = tmp_path / "seen.db"
+    reg_path = tmp_path / "reg.db"
+
+    registry = BoardRegistry(reg_path)
+    registry.register("greenhouse", "acme-co", company_name="Acme")
+    registry.close()
+
+    fake_source = MagicMock()
+    fake_source.return_value = fake_source
+    fake_source.fetch_jobs = AsyncMock(return_value=[])
+
+    with patch.dict("braevity.core.scheduler.ATS_SOURCES", {"greenhouse": fake_source}):
+        count, jobs = asyncio.run(run_slow_cycle({}, db_path, reg_path))
+
+    assert count == 0
+
+    registry = BoardRegistry(reg_path)
+    boards = registry.get_active_boards("greenhouse")
+    registry.close()
+    assert len(boards) == 1
+    assert boards[0]["fail_count"] == 0

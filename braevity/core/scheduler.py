@@ -120,10 +120,7 @@ async def run_slow_cycle(
                     try:
                         company = _board_to_company(board)
                         jobs = await src.fetch_jobs(s, company)
-                        if jobs:
-                            registry.update_after_fetch(board["id"], len(jobs))
-                        else:
-                            registry.record_failure(board["id"])
+                        registry.update_after_fetch(board["id"], len(jobs))
                         return jobs
                     except Exception as e:
                         logger.warning("ATS %s board %s failed: %s", board["ats"], board["token"], e)
