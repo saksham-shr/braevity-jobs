@@ -18,6 +18,12 @@ class WorkdaySource(BaseSource):
         parsed = urlparse(base_url)
         hostname = parsed.hostname
 
+        if not hostname:
+            token = base_url.split("/")[0]
+            base_url = f"https://{token}.wd5.myworkdayjobs.com"
+            hostname = f"{token}.wd5.myworkdayjobs.com"
+            parsed = urlparse(base_url)
+
         if "myworkdayjobs.com" in hostname:
             # ponytail: standard pattern nvidia.wd5.myworkdayjobs.com
             subdomain = hostname.split(".")[0]
