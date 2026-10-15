@@ -1,6 +1,5 @@
 from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.shortcuts import radiolist_dialog
 from braevity.cli.suggestions import ROLES, CITIES, COUNTRIES, EXPERIENCE_LEVELS
 from braevity.cli.theme import console
 
@@ -11,7 +10,7 @@ def _comma_completer(suggestions: list[str]) -> WordCompleter:
 
 def prompt_role() -> str:
     completer = WordCompleter(ROLES, ignore_case=True)
-    console.print("  Role to track:", style="primary", end=" ")
+    console.print("  Role:", style="primary", end=" ")
     return pt_prompt("", completer=completer).strip()
 
 
@@ -34,12 +33,22 @@ def prompt_countries() -> list[str]:
 
 
 def prompt_experience() -> str:
-    result = radiolist_dialog(
-        title="Experience Level",
-        text="Select experience level:",
-        values=EXPERIENCE_LEVELS,
-    ).run()
-    return result or "any"
+    console.print()
+    console.print("  Experience level:", style="primary")
+    for i, (value, label) in enumerate(EXPERIENCE_LEVELS, 1):
+        console.print(f"  {i:>2}. {label}")
+    console.print()
+
+    while True:
+        console.print("  Pick [1-10]:", style="primary", end=" ")
+        raw = pt_prompt("").strip()
+        try:
+            idx = int(raw)
+            if 1 <= idx <= len(EXPERIENCE_LEVELS):
+                return EXPERIENCE_LEVELS[idx - 1][0]
+        except ValueError:
+            pass
+        console.print(f"  Enter a number 1-{len(EXPERIENCE_LEVELS)}.", style="error")
 
 
 def prompt_path(label: str, default: str = "./jobs") -> str:

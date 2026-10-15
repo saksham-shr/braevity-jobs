@@ -1,13 +1,28 @@
 import asyncio
 import logging
-from prompt_toolkit.shortcuts import radiolist_dialog
-from braevity.cli.theme import console, print_banner
+from prompt_toolkit import prompt as pt_prompt
+from prompt_toolkit.completion import WordCompleter
+from braevity.cli.theme import console, print_banner, PRIMARY
 from braevity.cli.prompts import (
     prompt_role, prompt_cities, prompt_countries,
     prompt_experience, prompt_path, prompt_confirm,
 )
 from braevity.config import load_config, save_config, config_dir
 from rich.table import Table
+
+
+COMMANDS = {
+    "init": "Set up Braevity config",
+    "watch": "Add a new job watch",
+    "list": "View all configured watches",
+    "remove": "Remove a watch by number",
+    "start": "Start monitoring",
+    "status": "Show current status",
+    "help": "Show available commands",
+    "exit": "Exit Braevity",
+}
+
+_cmd_completer = WordCompleter(list(COMMANDS.keys()), ignore_case=True)
 
 
 def show_status_line() -> None:
@@ -24,23 +39,31 @@ def show_status_line() -> None:
         except Exception:
             pass
     console.print(
-        f"  {len(watches)} watches · {tracked} jobs tracked",
+        f"  {len(watches)} watches ·· {tracked} jobs tracked",
         style="dim",
     )
+
+
+def show_help() -> None:
+    console.print()
+    console.print("  COMMANDS", style="primary")
+    for cmd, desc in COMMANDS.items():
+        console.print(f"    {cmd:<10} {desc}")
     console.print()
 
 
 def tui_init() -> None:
     config = load_config()
-    excel_path = prompt_path("Where should Excel files be saved?", default="./jobs")
+    excel_default = str(config_dir() / "exports")
+    excel_path = prompt_path("Excel export path:", default=excel_default)
     config["excel_path"] = excel_path
 
     if prompt_confirm("Set up email notifications via SMTP?"):
-        email = prompt_path("Notification email", default="")
-        smtp_host = prompt_path("SMTP host", default="smtp.gmail.com")
-        smtp_port = prompt_path("SMTP port", default="587")
-        smtp_user = prompt_path("SMTP user (email)", default="")
-        smtp_password = prompt_path("SMTP password (app password)", default="")
+        email = prompt_path("Notification email:", default="")
+        smtp_host = prompt_path("SMTP host:", default="smtp.gmail.com")
+        smtp_port = prompt_path("SMTP port:", default="587")
+        smtp_user = prompt_path("SMTP user (email):", default="")
+        smtp_password = prompt_path("SMTP password (app password):", default="")
         config["notification"] = {
             "email": email,
             "smtp_host": smtp_host,
@@ -66,7 +89,7 @@ def tui_watch() -> None:
     experience = prompt_experience()
     countries = prompt_countries()
     cities = prompt_cities()
-    poll_interval = prompt_path("Poll interval in minutes", default="30")
+    poll_interval = prompt_path("Poll interval in minutes:", default="30")
 
     watch_entry = {
         "role": role,
@@ -87,15 +110,17 @@ def tui_list() -> None:
     config = load_config()
     watches = config.get("watches", [])
     if not watches:
-        console.print("  No watches configured. Select 'Add a watch' first.", style="dim")
+        console.print("  No watches configured. Type 'watch' to add one.", style="dim")
         return
 
-    table = Table(title="Watches", border_style="dim")
+    console.print()
+    console.print("  WATCHES", style="primary")
+    table = Table(border_style="dim", show_header=True, padding=(0, 1))
     table.add_column("#", style="bold", width=4)
     table.add_column("Role", style="primary")
-    table.add_column("Level", width=12)
-    table.add_column("Locations")
-    table.add_column("Interval", width=10)
+    table.add_column("Exp", width=12)
+    table.add_column("Locations", min_width=20)
+    table.add_column("Interval", width=10, justify="right")
 
     for i, w in enumerate(watches, 1):
         locs = w.get("locations", {})
@@ -107,7 +132,6 @@ def tui_list() -> None:
             loc_str, f"{w.get('poll_interval', 30)}m",
         )
 
-    console.print()
     console.print(table)
     console.print()
 
@@ -120,7 +144,7 @@ def tui_remove() -> None:
         return
 
     tui_list()
-    index_str = prompt_path("Watch number to remove", default="")
+    index_str = prompt_path("Watch number to remove:", default="")
     if not index_str:
         return
     try:
@@ -140,7 +164,7 @@ def tui_start() -> None:
     config = load_config()
     watches = config.get("watches", [])
     if not watches:
-        console.print("  No watches configured. Add a watch first.", style="error")
+        console.print("  No watches configured. Type 'watch' to add one.", style="error")
         return
 
     console.print(f"  Starting {len(watches)} watch(es)...", style="primary")
@@ -160,61 +184,72 @@ def tui_status() -> None:
     config = load_config()
     watches = config.get("watches", [])
     excel_path = config.get("excel_path", "not set")
-    console.print(f"  Watches: {len(watches)}", style="primary")
-    console.print(f"  Excel path: {excel_path}")
+
+    console.print()
+    console.print("  STATUS", style="primary")
+    console.print(f"  watches ·· {len(watches)}")
+    console.print(f"  export  ·· {excel_path}")
+
     db_path = config_dir() / "seen.db"
     if db_path.exists():
         import sqlite3
         conn = sqlite3.connect(str(db_path))
         count = conn.execute("SELECT COUNT(*) FROM seen_jobs").fetchone()[0]
         conn.close()
-        console.print(f"  Total jobs tracked: {count}")
+        console.print(f"  tracked ·· {count}")
     else:
-        console.print("  No jobs tracked yet.", style="dim")
+        console.print("  tracked ·· 0", style="dim")
+    console.print()
 
 
-MENU_CHOICES = [
-    ("init", "Set up Braevity (init)"),
-    ("watch", "Add a watch"),
-    ("list", "View watches"),
-    ("remove", "Remove a watch"),
-    ("start", "Start monitoring"),
-    ("status", "View status"),
-    ("exit", "Exit"),
-]
-
-MENU_ACTIONS = {
+REPL_ACTIONS = {
     "init": tui_init,
     "watch": tui_watch,
     "list": tui_list,
     "remove": tui_remove,
     "start": tui_start,
     "status": tui_status,
+    "help": show_help,
 }
 
 
-def main_menu() -> None:
+def main_repl() -> None:
     print_banner()
+    show_status_line()
+    console.print()
+
+    config_path = config_dir() / "config.yaml"
+    if not config_path.exists():
+        console.print("  Welcome! Type 'init' to set up, or 'help' for commands.")
+    console.print()
 
     while True:
-        show_status_line()
         try:
-            choice = radiolist_dialog(
-                title="Braevity",
-                text="What would you like to do?",
-                values=MENU_CHOICES,
-            ).run()
+            cmd = pt_prompt(
+                [("class:prompt", "braevity> ")],
+                style=_prompt_style(),
+                completer=_cmd_completer,
+            ).strip().lower()
         except KeyboardInterrupt:
             break
-
-        if choice is None or choice == "exit":
-            console.print("  Goodbye!", style="dim")
+        except EOFError:
             break
 
-        action = MENU_ACTIONS.get(choice)
+        if not cmd:
+            continue
+        if cmd == "exit":
+            break
+
+        action = REPL_ACTIONS.get(cmd)
         if action:
             try:
                 action()
             except KeyboardInterrupt:
                 console.print("\n  Cancelled.", style="dim")
-        console.print()
+        else:
+            console.print(f"  Unknown command '{cmd}'. Type 'help' for available commands.")
+
+
+def _prompt_style():
+    from prompt_toolkit.styles import Style
+    return Style.from_dict({"prompt": f"bold {PRIMARY}"})

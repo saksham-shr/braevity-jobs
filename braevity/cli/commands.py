@@ -9,8 +9,8 @@ from braevity.config import load_config, save_config, config_dir
 def cli(ctx):
     """Braevity — CLI job monitor for ATS platforms."""
     if ctx.invoked_subcommand is None:
-        from braevity.cli.tui import main_menu
-        main_menu()
+        from braevity.cli.tui import main_repl
+        main_repl()
 
 
 @cli.command()
