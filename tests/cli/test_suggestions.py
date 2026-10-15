@@ -1,4 +1,4 @@
-from braevity.cli.suggestions import ROLES, CITIES, COUNTRIES, EXPERIENCE_LEVELS
+from braevity.cli.suggestions import ROLES, CITIES, COUNTRIES, EXPERIENCE_LEVELS, EXPERIENCE_MAP
 
 
 def test_roles_non_empty():
@@ -13,33 +13,35 @@ def test_cities_include_remote():
     assert "Remote" in CITIES
 
 
-def test_cities_include_bangalore():
-    assert "Bangalore" in CITIES
+def test_cities_include_bengaluru():
+    assert "Bengaluru" in CITIES
 
 
 def test_countries_include_india():
     assert "India" in COUNTRIES
 
 
-def test_countries_include_worldwide():
-    assert "Worldwide" in COUNTRIES
-
-
 def test_experience_levels_has_any():
     values = [v for v, _ in EXPERIENCE_LEVELS]
-    assert "any" in values
+    assert "1" in values
 
 
 def test_experience_levels_has_intern():
-    values = [v for v, _ in EXPERIENCE_LEVELS]
-    assert "intern" in values
+    labels = [label for _, label in EXPERIENCE_LEVELS]
+    assert "Intern" in labels
 
 
 def test_experience_levels_has_director():
-    values = [v for v, _ in EXPERIENCE_LEVELS]
-    assert "director" in values
+    labels = [label for _, label in EXPERIENCE_LEVELS]
+    assert "Director+" in labels
 
 
 def test_experience_levels_no_duplicates():
     values = [v for v, _ in EXPERIENCE_LEVELS]
     assert len(values) == len(set(values))
+
+
+def test_experience_map():
+    assert EXPERIENCE_MAP["1"] == "any"
+    assert EXPERIENCE_MAP["6"] == "senior"
+    assert EXPERIENCE_MAP["10"] == "director"

@@ -9,8 +9,8 @@ from braevity.config import load_config, save_config, config_dir
 def cli(ctx):
     """Braevity — CLI job monitor for ATS platforms."""
     if ctx.invoked_subcommand is None:
-        from braevity.cli.tui import main_repl
-        main_repl()
+        from braevity.cli.tui import main_tui
+        main_tui()
 
 
 @cli.command()
@@ -79,33 +79,23 @@ def watch():
 @cli.command("list")
 def list_watches():
     """Show all configured watches."""
-    from braevity.cli.theme import console
-    from rich.table import Table
-
     config = load_config()
     watches = config.get("watches", [])
     if not watches:
-        console.print("No watches configured. Run 'braevity watch' first.")
+        click.echo("No watches configured. Run 'braevity watch' first.")
         return
 
-    table = Table(border_style="dim")
-    table.add_column("#", style="bold", width=4)
-    table.add_column("Role", style="#E84A1E")
-    table.add_column("Exp", width=12)
-    table.add_column("Locations", min_width=20)
-    table.add_column("Interval", width=10)
-
+    click.echo(f"{'#':<4} {'Role':<25} {'Exp':<8} {'Locations':<40} {'Interval'}")
+    click.echo("-" * 85)
     for i, w in enumerate(watches, 1):
         locs = w.get("locations", {})
         countries = ", ".join(locs.get("countries", []))
         cities = ", ".join(locs.get("cities", []))
         loc_str = f"{countries} · {cities}" if countries and cities else countries or cities
-        table.add_row(
-            str(i), w["role"], w.get("experience", "any"),
-            loc_str, f"{w.get('poll_interval', 30)}m",
+        click.echo(
+            f"{i:<4} {w['role']:<25} {w.get('experience', 'any'):<8} "
+            f"{loc_str:<40} {w.get('poll_interval', 30)}m"
         )
-
-    console.print(table)
 
 
 @cli.command()
@@ -125,15 +115,13 @@ def remove(index):
 @cli.command()
 def start():
     """Start monitoring all configured watches."""
-    from braevity.cli.theme import console
-
     config = load_config()
     watches = config.get("watches", [])
     if not watches:
-        console.print("No watches configured. Run 'braevity watch' first.", style="error")
+        click.echo("No watches configured. Run 'braevity watch' first.")
         return
 
-    console.print(f"Starting {len(watches)} watch(es)...", style="primary")
+    click.echo(f"Starting {len(watches)} watch(es)...")
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] %(message)s",
@@ -145,7 +133,7 @@ def start():
     try:
         asyncio.run(run_scheduler(config))
     except KeyboardInterrupt:
-        console.print("\nStopped.", style="dim")
+        click.echo("\nStopped.")
 
 
 @cli.command()
