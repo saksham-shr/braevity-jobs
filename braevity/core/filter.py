@@ -18,12 +18,17 @@ LOCATION_ALIASES = {
 
 REMOTE_VARIANTS = {"remote", "work from home", "wfh", "anywhere", "distributed"}
 
-SENIOR_SIGNALS = re.compile(
-    r"\b(senior|sr\.?|staff|principal|lead|distinguished|iv|v\b|l[56789])\b", re.I
-)
-JUNIOR_SIGNALS = re.compile(
-    r"\b(junior|jr\.?|associate|entry|fresher|intern|\bi\b|l[34])\b", re.I
-)
+EXPERIENCE_PATTERNS = {
+    "intern": re.compile(r"\b(intern|internship)\b", re.I),
+    "entry_level": re.compile(r"\b(entry.level|fresh|graduate|new.grad)\b", re.I),
+    "junior": re.compile(r"\b(junior|jr\.?|associate)\b|\bsde\s*i\b|\bi\b(?=\s*$)", re.I),
+    "mid": re.compile(r"\b(mid|middle)\b|\b(sde|swe)[\s-]*2\b|\bii\b", re.I),
+    "senior": re.compile(r"\b(senior|sr\.?)\b|\b(sde|swe)[\s-]*3\b|\biii\b", re.I),
+    "staff": re.compile(r"\b(staff|lead)\b", re.I),
+    "principal": re.compile(r"\b(principal|architect|distinguished|fellow)\b", re.I),
+    "manager": re.compile(r"\b(manager|engineering\s+manager|head\s+of)\b", re.I),
+    "director": re.compile(r"\b(director|vp|vice\s+president|cto|chief)\b", re.I),
+}
 
 
 def _normalize(text: str) -> str:
@@ -86,17 +91,10 @@ def matches_location(
 def matches_experience(job: Job, level: str) -> bool:
     if level == "any":
         return True
-    title = job.title
-    has_senior = bool(SENIOR_SIGNALS.search(title))
-    has_junior = bool(JUNIOR_SIGNALS.search(title))
-
-    if level == "senior":
-        return has_senior
-    if level == "junior":
-        return has_junior
-    if level == "mid":
-        return not has_senior and not has_junior
-    return True
+    pattern = EXPERIENCE_PATTERNS.get(level)
+    if pattern is None:
+        return True
+    return bool(pattern.search(job.title))
 
 
 def filter_jobs(jobs: list[Job], watch: dict) -> list[Job]:

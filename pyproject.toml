@@ -13,6 +13,8 @@ dependencies = [
     "openpyxl>=3.1",
     "pyyaml>=6.0",
     "plyer>=2.1",
+    "rich>=13.0",
+    "prompt-toolkit>=3.0",
 ]
 
 [project.scripts]

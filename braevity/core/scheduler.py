@@ -78,6 +78,7 @@ def _ensure_registry(registry_path: Path) -> BoardRegistry:
 
 async def run_fast_cycle(
     config: dict, db_path: Path, registry_path: Path,
+    on_progress: callable = None,
 ) -> tuple[int, list[Job]]:
     store = DedupStore(db_path)
     registry = _ensure_registry(registry_path)
@@ -91,8 +92,12 @@ async def run_fast_cycle(
                 jobs = await agg.fetch_all_jobs(session)
                 all_jobs.extend(jobs)
                 logger.info("%s: fetched %d jobs", agg.name, len(jobs))
+                if on_progress:
+                    on_progress(agg.name, len(jobs))
             except Exception as e:
                 logger.warning("%s failed: %s", agg.name, e)
+                if on_progress:
+                    on_progress(agg.name, -1)
             await asyncio.sleep(AGGREGATOR_DELAY)
 
     discovered = discover_from_jobs(all_jobs, registry)
