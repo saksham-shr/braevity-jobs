@@ -10,7 +10,7 @@ from textual.widgets import Static, Input, Header, Footer, DataTable
 from textual.screen import Screen
 from braevity.config import load_config, save_config, config_dir
 from braevity.cli.theme import (
-    PRIMARY, SUCCESS, WARNING, ERROR, DIM, FAINT, BG, FG, SURFACE, BORDER,
+    PRIMARY, SUCCESS, WARNING, ERROR, DIM, DIM_HEADER, FAINT, BG, FG, SURFACE, BORDER,
 )
 from braevity.cli.suggestions import (
     ROLES, CITIES, COUNTRIES, EXPERIENCE_LEVELS, EXPERIENCE_MAP,
@@ -19,6 +19,22 @@ from braevity.cli.suggestions import (
 logger = logging.getLogger(__name__)
 
 DOT_LEADER = " ·· "
+
+# Signal-lamp mark, drawn from the same box-drawing glyphs used throughout the
+# UI (the prompt box, watch table) rather than an image asset. Shown once at
+# launch (first-run and launch screens only) per DESIGN.md: never repeated.
+BANNER_LINES = [
+    f"  [{PRIMARY}]┌─┐[/{PRIMARY}]",
+    f"  [{PRIMARY}]│●│[/{PRIMARY}]  [bold]braevity[/bold]",
+    f"  [{PRIMARY}]└─┘[/{PRIMARY}]  [dim]job monitor[/dim]",
+]
+
+# Step order reflects the app's actual field sequence (Role, then
+# Experience/Level, then Location, then Interval) -- not the sequence a
+# visual mockup may have shown, since reordering real fields is a behavior
+# change, not a redesign.
+WATCH_STEPS = ["Role", "Level", "Location", "Interval"]
+INIT_STEPS = ["Export", "SMTP", "Review"]
 
 
 def _tracked_count() -> int:
@@ -39,38 +55,89 @@ def _dot_line(label: str, value: str, width: int = 30) -> str:
     return f"  {label} {dots} {value}"
 
 
+def _breadcrumb(steps: list[str], current: str) -> str:
+    parts = []
+    for step in steps:
+        if step == current:
+            parts.append(f"[{PRIMARY}][bold]{step}[/bold][/{PRIMARY}]")
+        else:
+            parts.append(f"[dim]{step}[/dim]")
+    return "  " + " [dim]›[/dim] ".join(parts)
+
+
 APP_CSS = f"""
 Screen {{
     background: {BG};
     color: {FG};
 }}
+
 #header-bar {{
     dock: top;
     height: 1;
+    width: 100%;
     background: {SURFACE};
     color: {FG};
+    layout: horizontal;
+}}
+#header-left {{
+    width: 1fr;
     padding: 0 1;
+    content-align: left middle;
 }}
-#header-bar .header-left {{
+#header-right {{
     width: auto;
+    padding: 0 1;
+    color: {DIM_HEADER};
+    content-align: right middle;
 }}
-#header-bar .header-right {{
-    width: auto;
-    color: {DIM};
-    text-align: right;
-}}
+
 #content {{
     height: 1fr;
     padding: 1 2;
     overflow-y: auto;
 }}
-#prompt-box {{
+
+#bottom-bar {{
     dock: bottom;
+    height: auto;
+    width: 100%;
+}}
+#command-menu {{
+    height: auto;
+    width: 100%;
+    background: {SURFACE};
+    padding: 0 2;
+    display: none;
+}}
+#command-menu.visible {{
+    display: block;
+}}
+#command-menu Static {{
+    color: {DIM_HEADER};
+}}
+#status-line {{
+    height: 1;
+    width: 100%;
+    padding: 0 2;
+    color: {DIM};
+}}
+
+#prompt-box {{
     height: 3;
-    border: round {BORDER};
+    border: round {PRIMARY};
+    padding: 0 0;
+    margin: 0 1;
+    background: {BG};
+}}
+#prompt-label {{
+    width: auto;
     padding: 0 1;
+    color: {PRIMARY};
+    text-style: bold;
+    content-align: left middle;
 }}
 #prompt-input {{
+    width: 1fr;
     background: {BG};
     color: {FG};
     border: none;
@@ -78,12 +145,14 @@ Screen {{
 #prompt-input:focus {{
     border: none;
 }}
+
 #footer-bar {{
-    dock: bottom;
     height: 1;
     color: {DIM};
-    padding: 0 1;
+    padding: 0 2;
+    background: {BG};
 }}
+
 .section-header {{
     color: {PRIMARY};
     text-style: bold;
@@ -110,6 +179,7 @@ Screen {{
 .bold {{
     text-style: bold;
 }}
+
 DataTable {{
     background: {BG};
     height: auto;
@@ -141,39 +211,56 @@ class BraevityApp(App):
     CSS = APP_CSS
     BINDINGS = [
         Binding("ctrl+c", "quit", "Exit", show=False),
+        Binding("escape", "cancel_or_close", "Cancel", show=False),
+        Binding("shift+tab", "step_back", "Back", show=False, priority=True),
+        Binding("tab", "accept_menu", "Accept", show=False, priority=True),
     ]
 
-    def compose(self) -> ComposeResult:
-        config = load_config()
-        watches = config.get("watches", [])
-        tracked = _tracked_count()
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._mode: str | None = None
+        self._flow_stack: list[tuple[str | None, str, bool]] = []
+        self._last_scan: str | None = None
+        self._watch_data: dict = {}
+        self._init_data: dict = {}
 
+    def compose(self) -> ComposeResult:
         with Horizontal(id="header-bar"):
-            yield Static(
-                " [bold]braevity[/bold] [dim]· job monitor[/dim]",
-                classes="header-left",
-            )
-            yield Static(
-                f"idle · {len(watches)} watches · {tracked} tracked ",
-                classes="header-right",
-                id="header-right",
-            )
+            yield Static(" [bold]braevity[/bold] [dim]· job monitor[/dim]", id="header-left")
+            yield Static("", id="header-right")
 
         yield Vertical(id="content")
-        yield Static("", id="footer-bar")
-        yield Input(
-            placeholder="Type /help for commands",
-            id="prompt-input",
-        )
+
+        with Vertical(id="bottom-bar"):
+            yield Vertical(id="command-menu")
+            yield Static("", id="status-line")
+            with Horizontal(id="prompt-box"):
+                yield Static("braevity>", id="prompt-label")
+                yield Input(placeholder="/help for commands", id="prompt-input")
+            yield Static("", id="footer-bar")
 
     def on_mount(self) -> None:
         self._update_header()
+        self._update_status_line()
         config = load_config()
         config_path = config_dir() / "config.yaml"
         if not config_path.exists() or not config.get("watches"):
             self._show_first_run()
         else:
             self._show_launch(config)
+
+    # ------------------------------------------------------------------
+    # Chrome: header breadcrumb, persistent status line, command menu
+    # ------------------------------------------------------------------
+
+    def _set_breadcrumb(self, command: str | None) -> None:
+        header_left = self.query_one("#header-left", Static)
+        if command is None:
+            header_left.update(" [bold]braevity[/bold] [dim]· job monitor[/dim]")
+        else:
+            header_left.update(
+                f" [bold]braevity[/bold] [dim]›[/dim] [{PRIMARY}]{command}[/{PRIMARY}]"
+            )
 
     def _update_header(self) -> None:
         config = load_config()
@@ -182,18 +269,118 @@ class BraevityApp(App):
         header_right = self.query_one("#header-right", Static)
         header_right.update(f"idle · {len(watches)} watches · {tracked} tracked ")
 
-    def _clear_content(self) -> None:
+    def _update_status_line(self) -> None:
+        config = load_config()
+        watches = config.get("watches", [])
+        tracked = _tracked_count()
+        last_scan = self._last_scan or "never"
+        status = self.query_one("#status-line", Static)
+        status.update(
+            f"  watches [{PRIMARY}]··[/{PRIMARY}] {len(watches)}"
+            f"   tracked [{PRIMARY}]··[/{PRIMARY}] {tracked}"
+            f"   last scan [{PRIMARY}]··[/{PRIMARY}] {last_scan}"
+        )
+
+    def _matching_commands(self, typed: str) -> list[tuple[str, str]]:
+        prefix = typed.lower()
+        if prefix in ("", "/"):
+            return list(COMMANDS.items())
+        return [(c, d) for c, d in COMMANDS.items() if c.startswith(prefix)]
+
+    def _show_menu(self, matches: list[tuple[str, str]]) -> None:
+        menu = self.query_one("#command-menu", Vertical)
+        menu.remove_children()
+        menu.mount(Static(f"  [dim]matching commands[/dim]"))
+        for cmd, desc in matches:
+            menu.mount(Static(f"  [bold]{cmd:<13}[/bold] [dim]{desc}[/dim]"))
+        menu.add_class("visible")
+
+    def _hide_menu(self) -> None:
+        menu = self.query_one("#command-menu", Vertical)
+        menu.remove_children()
+        menu.remove_class("visible")
+
+    @on(Input.Changed, "#prompt-input")
+    def handle_input_changed(self, event: Input.Changed) -> None:
+        if self._mode is not None:
+            self._hide_menu()
+            return
+        value = event.value
+        if value.startswith("/"):
+            matches = self._matching_commands(value)
+            if matches:
+                self._show_menu(matches)
+            else:
+                self._hide_menu()
+        else:
+            self._hide_menu()
+
+    def action_accept_menu(self) -> None:
+        menu = self.query_one("#command-menu", Vertical)
+        if not menu.has_class("visible"):
+            return
+        prompt_input = self.query_one("#prompt-input", Input)
+        matches = self._matching_commands(prompt_input.value)
+        if matches:
+            prompt_input.value = matches[0][0] + " "
+            prompt_input.cursor_position = len(prompt_input.value)
+        self._hide_menu()
+
+    def action_cancel_or_close(self) -> None:
+        menu = self.query_one("#command-menu", Vertical)
+        if menu.has_class("visible"):
+            self._hide_menu()
+            return
+        if self._mode is not None:
+            self._cancel_flow()
+
+    def action_step_back(self) -> None:
+        if self._mode is None or not self._flow_stack:
+            return
+        mode, placeholder, password = self._flow_stack.pop()
+        self._mode = mode
+        prompt_input = self.query_one("#prompt-input", Input)
+        prompt_input.value = ""
+        prompt_input.placeholder = placeholder
+        prompt_input.password = password
         content = self.query_one("#content", Vertical)
-        content.remove_children()
+        content.mount(Static(f"  [dim]‹ back[/dim]"))
+        content.scroll_end(animate=False)
+
+    def _cancel_flow(self) -> None:
+        self._mode = None
+        self._flow_stack = []
+        prompt_input = self.query_one("#prompt-input", Input)
+        prompt_input.value = ""
+        prompt_input.placeholder = "/help for commands"
+        prompt_input.password = False
+        content = self.query_one("#content", Vertical)
+        content.mount(Static(""))
+        content.mount(Static("  [dim]Cancelled.[/dim]"))
+        content.scroll_end(animate=False)
+        self._set_breadcrumb(None)
+
+    def _append_header(self, command: str, markup: str) -> None:
+        """Append a new command's section header into the scrollback,
+        preceded by a mode-transition gap -- commands never clear the
+        screen, they print below whatever is already there."""
+        content = self.query_one("#content", Vertical)
+        content.mount(Static(""))
+        content.mount(Static(""))
+        content.mount(Static(markup))
+        self._set_breadcrumb(command)
+
+    def _scroll_to_end(self) -> None:
+        self.query_one("#content", Vertical).scroll_end(animate=False)
 
     def _set_footer(self, text: str) -> None:
         self.query_one("#footer-bar", Static).update(text)
 
     def _show_first_run(self) -> None:
-        self._clear_content()
         content = self.query_one("#content", Vertical)
+        for line in BANNER_LINES:
+            content.mount(Static(line))
         content.mount(Static(""))
-        content.mount(Static("  [bold]braevity[/bold]  [dim]job monitor[/dim]"))
         content.mount(Static(_dot_line("watches", "0")))
         content.mount(Static(_dot_line("tracked", "0")))
         content.mount(Static(_dot_line("last scan", "never")))
@@ -208,16 +395,16 @@ class BraevityApp(App):
         self._set_footer(" Type /help for commands                              ctrl+c to exit ")
 
     def _show_launch(self, config: dict) -> None:
-        self._clear_content()
         content = self.query_one("#content", Vertical)
         watches = config.get("watches", [])
         tracked = _tracked_count()
 
+        for line in BANNER_LINES:
+            content.mount(Static(line))
         content.mount(Static(""))
-        content.mount(Static("  [bold]braevity[/bold]  [dim]job monitor[/dim]"))
         content.mount(Static(_dot_line("watches", str(len(watches)))))
         content.mount(Static(_dot_line("tracked", str(tracked))))
-        content.mount(Static(_dot_line("last scan", "—")))
+        content.mount(Static(_dot_line("last scan", self._last_scan or "—")))
         content.mount(Static(""))
         content.mount(Static(
             f"  [{PRIMARY}][bold]WATCHES[/bold][/{PRIMARY}] "
@@ -242,12 +429,14 @@ class BraevityApp(App):
 
     @on(Input.Submitted, "#prompt-input")
     def handle_command(self, event: Input.Submitted) -> None:
-        if hasattr(self, "_mode") and self._mode is not None:
+        self._hide_menu()
+        if self._mode is not None:
             self._handle_modal_input(event)
             return
 
         cmd = event.value.strip().lower()
-        event.input.value = ""
+        with event.input.prevent(Input.Changed):
+            event.input.value = ""
         if not cmd:
             return
 
@@ -275,79 +464,48 @@ class BraevityApp(App):
         elif command == "/status":
             self._show_status()
         else:
-            self._clear_content()
             content = self.query_one("#content", Vertical)
+            content.mount(Static(""))
             content.mount(Static(f"  Unknown command '{command}'. Type /help for commands."))
+            self._scroll_to_end()
 
     def _show_help(self) -> None:
-        self._clear_content()
-        content = self.query_one("#content", Vertical)
-        content.mount(Static(""))
-        content.mount(Static(
-            f"  [{PRIMARY}][bold]COMMANDS[/bold][/{PRIMARY}] "
-            f"──────────── [dim]type / to autocomplete[/dim]"
-        ))
-        for cmd, desc in COMMANDS.items():
-            content.mount(Static(f"  [bold]{cmd:<13}[/bold] [dim]{desc}[/dim]"))
-
-        content.mount(Static(""))
-        content.mount(Static(
-            f"  [{PRIMARY}][bold]KEYBOARD[/bold][/{PRIMARY}] "
-            f"────────────"
-        ))
-        keys = [
-            ("enter", "run command / next field", "ctrl+c", "stop monitoring / cancel"),
-            ("tab", "autocomplete / next field", "shift+tab", "previous field"),
-            ("↑ ↓", "history / pick suggestion", "esc", "close menu / go back"),
-        ]
-        for left_key, left_desc, right_key, right_desc in keys:
-            content.mount(Static(
-                f"  [bold]{left_key:<9}[/bold] [dim]{left_desc:<25}[/dim]"
-                f"  [bold]{right_key:<11}[/bold] [dim]{right_desc}[/dim]"
-            ))
-        content.mount(Static(""))
-        content.mount(Static("  [dim]braevity.com[/dim]"))
-        self._set_footer(" esc close help                                           / to see commands ")
+        self._show_menu(list(COMMANDS.items()))
 
     def _show_init(self) -> None:
-        self._clear_content()
-        content = self.query_one("#content", Vertical)
-        self._init_step = 1
+        self._flow_stack = []
         self._init_data = {}
-
-        content.mount(Static(""))
-        content.mount(Static(
+        self._append_header(
+            "/init",
             f"  [{PRIMARY}][bold]Setup[/bold][/{PRIMARY}]  "
             f"[dim]braevity needs an export path before it can scan[/dim]"
-            f"             [bold]1/3[/bold]"
-        ))
+            f"             [bold]1/3[/bold]",
+        )
+        content = self.query_one("#content", Vertical)
+        content.mount(Static(_breadcrumb(INIT_STEPS, "Export")))
         content.mount(Static(""))
-        content.mount(Static(
-            f"  [{PRIMARY}]❯[/{PRIMARY}] [bold]Excel path[/bold]"
-        ))
+        content.mount(Static(f"  [{PRIMARY}]❯[/{PRIMARY}] [bold]Excel path[/bold]"))
         content.mount(Static("  [dim]Where should exported job files be saved?[/dim]"))
         content.mount(Static(""))
+        content.mount(Static("  [dim]esc cancel[/dim]"))
+        self._scroll_to_end()
 
         prompt_input = self.query_one("#prompt-input", Input)
         default_path = str(config_dir() / "exports")
         prompt_input.placeholder = f"Excel path (default: {default_path})"
         self._mode = "init_excel"
-        self._set_footer(" enter to accept default · type a path to override          ctrl+c cancel ")
+        self._set_footer(" enter to accept default · type a path to override          esc cancel ")
 
     def _show_watch(self) -> None:
-        self._clear_content()
-        content = self.query_one("#content", Vertical)
+        self._flow_stack = []
         self._watch_data = {}
-
+        self._append_header(
+            "/watch",
+            _breadcrumb(WATCH_STEPS, "Role"),
+        )
+        content = self.query_one("#content", Vertical)
         content.mount(Static(""))
-        content.mount(Static(
-            f"  [{PRIMARY}][bold]New watch[/bold][/{PRIMARY}]  "
-            f"[dim]field 1 of 4[/dim]"
-        ))
-        content.mount(Static(""))
-        content.mount(Static(
-            f"  [{PRIMARY}]❯[/{PRIMARY}] [bold][{PRIMARY}]Role[/{PRIMARY}][/bold]"
-        ))
+        content.mount(Static(f"  [{PRIMARY}]❯[/{PRIMARY}] [bold][{PRIMARY}]Role[/{PRIMARY}][/bold]"))
         content.mount(Static(""))
 
         suggestions_text = "  [dim]Suggestions: " + ", ".join(ROLES[:8]) + "...[/dim]"
@@ -364,6 +522,9 @@ class BraevityApp(App):
             f"  [{PRIMARY}][bold]EXPERIENCE[/bold][/{PRIMARY}] ──── [dim]1–10[/dim]"
         ))
         content.mount(Static(exp_lines))
+        content.mount(Static(""))
+        content.mount(Static("  [dim]shift+tab back · esc cancel[/dim]"))
+        self._scroll_to_end()
 
         prompt_input = self.query_one("#prompt-input", Input)
         prompt_input.placeholder = "Role to track (e.g. Backend Engineer)"
@@ -371,13 +532,15 @@ class BraevityApp(App):
         self._set_footer(" ↑↓ choose · tab accept · esc cancel                      1-10 pick level ")
 
     def _show_list(self) -> None:
-        self._clear_content()
         self._update_header()
+        self._update_status_line()
+        self._set_breadcrumb("/list")
         content = self.query_one("#content", Vertical)
+        content.mount(Static(""))
+        content.mount(Static(""))
         config = load_config()
         watches = config.get("watches", [])
 
-        content.mount(Static(""))
         content.mount(Static(
             f"  [{PRIMARY}][bold]WATCHES[/bold][/{PRIMARY}] "
             f"──────────── [dim]{len(watches)}[/dim]"
@@ -387,6 +550,7 @@ class BraevityApp(App):
             content.mount(Static(""))
             content.mount(Static("  [dim]No watches configured. Type /watch to add one.[/dim]"))
             self._set_footer(" /watch to add a watch                                    /help for commands ")
+            self._scroll_to_end()
             return
 
         table = DataTable()
@@ -413,55 +577,60 @@ class BraevityApp(App):
             f"[bold]/watch[/bold] [dim]to add[/dim]"
         ))
         self._set_footer(" /remove N to delete a watch                              /help for commands ")
+        self._scroll_to_end()
 
     def _handle_remove(self, args: str) -> None:
         config = load_config()
         watches = config.get("watches", [])
+        content = self.query_one("#content", Vertical)
 
         if not args:
-            self._clear_content()
-            content = self.query_one("#content", Vertical)
+            content.mount(Static(""))
             content.mount(Static("  Usage: /remove N (where N is watch number)"))
+            self._scroll_to_end()
             return
 
         try:
             index = int(args)
         except ValueError:
-            self._clear_content()
-            content = self.query_one("#content", Vertical)
+            content.mount(Static(""))
             content.mount(Static(f"  [{ERROR}]Invalid number: {args}[/{ERROR}]"))
+            self._scroll_to_end()
             return
 
         if index < 1 or index > len(watches):
-            self._clear_content()
-            content = self.query_one("#content", Vertical)
+            content.mount(Static(""))
             content.mount(Static(
                 f"  [{ERROR}]Invalid index. You have {len(watches)} watches.[/{ERROR}]"
             ))
+            self._scroll_to_end()
             return
 
         removed = watches.pop(index - 1)
         save_config(config)
         self._update_header()
+        self._update_status_line()
         self._show_list()
-
-        content = self.query_one("#content", Vertical)
         content.mount(Static(""))
         content.mount(Static(
             f"  [{SUCCESS}]✓ Removed watch: \"{removed['role']}\"[/{SUCCESS}]"
         ))
+        self._scroll_to_end()
 
     def _show_start(self) -> None:
-        self._clear_content()
         content = self.query_one("#content", Vertical)
         config = load_config()
         watches = config.get("watches", [])
 
         if not watches:
+            content.mount(Static(""))
             content.mount(Static(
                 f"  [{ERROR}]No watches configured. Type /watch to add one.[/{ERROR}]"
             ))
+            self._scroll_to_end()
             return
+
+        self._append_header("/start", f"  [{PRIMARY}][bold]SCANNING[/bold][/{PRIMARY}] ──────────── [dim]starting...[/dim]")
 
         header_right = self.query_one("#header-right", Static)
         header_right.update(
@@ -469,15 +638,10 @@ class BraevityApp(App):
         )
 
         content.mount(Static(""))
-        content.mount(Static(
-            f"  [{PRIMARY}][bold]SCANNING[/bold][/{PRIMARY}] "
-            f"──────────── [dim]starting...[/dim]"
-        ))
-        content.mount(Static(""))
 
         for agg_name in ["RemoteOK", "Jobicy", "Arbeitnow", "Himalayas"]:
             content.mount(Static(
-                f"  [dim]…[/dim] {agg_name:<13} [dim]waiting...[/dim]",
+                f"  [dim]·[/dim] {agg_name:<13} [dim]scanning…[/dim]",
                 id=f"source-{agg_name.lower()}",
             ))
 
@@ -487,6 +651,7 @@ class BraevityApp(App):
             f"  [{PRIMARY}][bold]ctrl+c[/bold][/{PRIMARY}] [dim]stops monitoring[/dim]"
         ))
         self._set_footer(" ctrl+c stop monitoring                                   /status dashboard ")
+        self._scroll_to_end()
 
         self._run_scan(config)
 
@@ -568,6 +733,9 @@ class BraevityApp(App):
     def _update_scan_summary(
         self, ok_count: int, total: int, new_jobs: int, matched: int
     ) -> None:
+        import datetime as _dt
+        self._last_scan = _dt.datetime.now().strftime("%H:%M")
+        self._update_status_line()
         try:
             widget = self.query_one("#scan-summary", Static)
         except Exception:
@@ -581,25 +749,21 @@ class BraevityApp(App):
         header_right.update(
             f"scan done · {new_jobs} new "
         )
+        self._scroll_to_end()
 
     def _show_status(self) -> None:
-        self._clear_content()
         self._update_header()
+        self._update_status_line()
+        self._append_header("/status", f"  [{PRIMARY}][bold]WATCHES[/bold][/{PRIMARY}] ──────────── [dim]—[/dim]")
         content = self.query_one("#content", Vertical)
         config = load_config()
         watches = config.get("watches", [])
         tracked = _tracked_count()
         excel_path = config.get("excel_path", "not set")
 
-        content.mount(Static(""))
-
-        content.mount(Static(
-            f"  [{PRIMARY}][bold]WATCHES[/bold][/{PRIMARY}] "
-            f"──────────── [dim]{len(watches)}[/dim]"
-        ))
         content.mount(Static(_dot_line("watches", str(len(watches)))))
         content.mount(Static(_dot_line("tracked", str(tracked))))
-        content.mount(Static(_dot_line("last scan", "—")))
+        content.mount(Static(_dot_line("last scan", self._last_scan or "—")))
         content.mount(Static(_dot_line("new today", "—")))
 
         if watches:
@@ -637,24 +801,26 @@ class BraevityApp(App):
         content.mount(Static(_dot_line("emailed", email)))
 
         self._set_footer(" /start to resume monitoring                              /help for commands ")
+        self._scroll_to_end()
 
     def _handle_modal_input(self, event: Input.Submitted) -> None:
         value = event.value.strip()
         prompt_input = event.input
+        self._flow_stack.append((self._mode, prompt_input.placeholder, prompt_input.password))
+        content = self.query_one("#content", Vertical)
 
         if self._mode == "init_excel":
             default_path = str(config_dir() / "exports")
             self._init_data["excel_path"] = value if value else default_path
             prompt_input.value = ""
 
-            self._clear_content()
-            content = self.query_one("#content", Vertical)
             content.mount(Static(""))
             content.mount(Static(
                 f"  [{PRIMARY}][bold]Setup[/bold][/{PRIMARY}]  "
                 f"[dim]SMTP configuration[/dim]"
                 f"                              [bold]2/3[/bold]"
             ))
+            content.mount(Static(_breadcrumb(INIT_STEPS, "SMTP")))
             content.mount(Static(""))
             content.mount(Static(
                 f"  [{SUCCESS}]✓[/{SUCCESS}] [dim]Excel path[/dim]  "
@@ -665,16 +831,17 @@ class BraevityApp(App):
                 f"  [{PRIMARY}]❯[/{PRIMARY}] [bold]Set up email notifications?[/bold] "
                 f"[dim](y/n, default: n)[/dim]"
             ))
+            content.mount(Static(""))
+            content.mount(Static("  [dim]shift+tab back · esc cancel[/dim]"))
             prompt_input.placeholder = "y/n (default: n)"
             self._mode = "init_smtp_confirm"
-            self._set_footer(" y for SMTP setup · n or enter to skip                    ctrl+c cancel ")
+            self._set_footer(" y for SMTP setup · n or enter to skip                    shift+tab back · esc cancel ")
 
         elif self._mode == "init_smtp_confirm":
             prompt_input.value = ""
             if value.lower() in ("y", "yes"):
                 self._mode = "init_smtp_host"
                 prompt_input.placeholder = "SMTP host (default: smtp.gmail.com)"
-                content = self.query_one("#content", Vertical)
                 content.mount(Static(""))
                 content.mount(Static(
                     f"  [{PRIMARY}][bold]SMTP[/bold][/{PRIMARY}] "
@@ -720,13 +887,13 @@ class BraevityApp(App):
 
         elif self._mode == "watch_role":
             if not value:
+                self._flow_stack.pop()
                 return
             self._watch_data["role"] = value
             prompt_input.value = ""
             prompt_input.placeholder = "Experience level (1-10, default: 1=Any)"
 
-            content = self.query_one("#content", Vertical)
-            content.mount(Static(""))
+            content.mount(Static(_breadcrumb(WATCH_STEPS, "Level")))
             content.mount(Static(
                 f"  [{SUCCESS}]✓[/{SUCCESS}] Role: [bold]{value}[/bold]"
             ))
@@ -738,7 +905,7 @@ class BraevityApp(App):
             prompt_input.value = ""
             prompt_input.placeholder = "Locations (comma-separated cities/countries, e.g. Remote, Bengaluru)"
 
-            content = self.query_one("#content", Vertical)
+            content.mount(Static(_breadcrumb(WATCH_STEPS, "Location")))
             content.mount(Static(
                 f"  [{SUCCESS}]✓[/{SUCCESS}] Experience: "
                 f"[bold]{self._watch_data['experience']}[/bold]"
@@ -759,8 +926,8 @@ class BraevityApp(App):
             prompt_input.value = ""
             prompt_input.placeholder = "Poll interval in minutes (default: 30)"
 
-            content = self.query_one("#content", Vertical)
             loc_display = ", ".join(locations) if locations else "any"
+            content.mount(Static(_breadcrumb(WATCH_STEPS, "Interval")))
             content.mount(Static(
                 f"  [{SUCCESS}]✓[/{SUCCESS}] Locations: [bold]{loc_display}[/bold]"
             ))
@@ -774,6 +941,8 @@ class BraevityApp(App):
             self._watch_data["poll_interval"] = interval
             prompt_input.value = ""
             self._finish_watch()
+
+        self._scroll_to_end()
 
     def _finish_init(self, smtp: bool) -> None:
         config = load_config()
@@ -792,13 +961,14 @@ class BraevityApp(App):
         save_config(config)
 
         self._mode = None
+        self._flow_stack = []
         prompt_input = self.query_one("#prompt-input", Input)
         prompt_input.placeholder = "Type /help for commands"
         prompt_input.password = False
 
-        self._clear_content()
         content = self.query_one("#content", Vertical)
         content.mount(Static(""))
+        content.mount(Static(_breadcrumb(INIT_STEPS, "Review")))
         content.mount(Static(
             f"  [{SUCCESS}]✓ Config saved to "
             f"{config_dir() / 'config.yaml'}[/{SUCCESS}]"
@@ -822,6 +992,9 @@ class BraevityApp(App):
         content.mount(Static("  [dim]Next: type /watch to add your first job watch.[/dim]"))
         self._set_footer(" /watch to add a watch                                    /help for commands ")
         self._update_header()
+        self._update_status_line()
+        self._set_breadcrumb(None)
+        self._scroll_to_end()
 
     def _finish_watch(self) -> None:
         config = load_config()
@@ -835,6 +1008,7 @@ class BraevityApp(App):
         save_config(config)
 
         self._mode = None
+        self._flow_stack = []
         prompt_input = self.query_one("#prompt-input", Input)
         prompt_input.placeholder = "Type /help for commands"
 
@@ -843,9 +1017,9 @@ class BraevityApp(App):
         cities_list = ", ".join(locs.get("cities", []))
         loc_str = f"{countries} · {cities_list}" if countries and cities_list else countries or cities_list or "any"
 
-        self._clear_content()
         content = self.query_one("#content", Vertical)
         content.mount(Static(""))
+        content.mount(Static(_breadcrumb(WATCH_STEPS, "Interval")))
         content.mount(Static(
             f"  [{SUCCESS}]✓ Watch added[/{SUCCESS}]"
         ))
@@ -862,6 +1036,9 @@ class BraevityApp(App):
         ))
         self._set_footer(" /start to begin · /watch to add another                  /help for commands ")
         self._update_header()
+        self._update_status_line()
+        self._set_breadcrumb(None)
+        self._scroll_to_end()
 
 
 def main_tui() -> None:
