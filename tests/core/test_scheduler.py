@@ -52,3 +52,45 @@ def test_slow_cycle_empty_results_not_failure(tmp_path):
     registry.close()
     assert len(boards) == 1
     assert boards[0]["fail_count"] == 0
+
+
+@patch("braevity.core.scheduler.AGGREGATORS")
+@patch("braevity.core.scheduler.discover_from_jobs", return_value=0)
+def test_fast_cycle_calls_progress_callback(mock_discover, mock_aggs, tmp_path):
+    fake_agg = MagicMock()
+    fake_agg.name = "fake"
+    fake_agg.fetch_all_jobs = AsyncMock(return_value=[_job()])
+    mock_aggs.__iter__ = lambda s: iter([fake_agg])
+
+    progress_calls = []
+
+    def on_progress(source_name, job_count):
+        progress_calls.append((source_name, job_count))
+
+    db_path = tmp_path / "seen.db"
+    reg_path = tmp_path / "reg.db"
+
+    count, jobs = asyncio.run(run_fast_cycle({}, db_path, reg_path, on_progress=on_progress))
+    assert count == 1
+    assert ("fake", 1) in progress_calls
+
+
+@patch("braevity.core.scheduler.AGGREGATORS")
+@patch("braevity.core.scheduler.discover_from_jobs", return_value=0)
+def test_fast_cycle_progress_callback_on_failure(mock_discover, mock_aggs, tmp_path):
+    fake_agg = MagicMock()
+    fake_agg.name = "broken"
+    fake_agg.fetch_all_jobs = AsyncMock(side_effect=RuntimeError("boom"))
+    mock_aggs.__iter__ = lambda s: iter([fake_agg])
+
+    progress_calls = []
+
+    def on_progress(source_name, job_count):
+        progress_calls.append((source_name, job_count))
+
+    db_path = tmp_path / "seen.db"
+    reg_path = tmp_path / "reg.db"
+
+    count, jobs = asyncio.run(run_fast_cycle({}, db_path, reg_path, on_progress=on_progress))
+    assert count == 0
+    assert ("broken", -1) in progress_calls

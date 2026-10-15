@@ -4,10 +4,13 @@ import logging
 from braevity.config import load_config, save_config, config_dir
 
 
-@click.group()
-def cli():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
     """Braevity — CLI job monitor for ATS platforms."""
-    pass
+    if ctx.invoked_subcommand is None:
+        from braevity.cli.tui import main_tui
+        main_tui()
 
 
 @cli.command()
@@ -88,7 +91,7 @@ def list_watches():
         locs = w.get("locations", {})
         countries = ", ".join(locs.get("countries", []))
         cities = ", ".join(locs.get("cities", []))
-        loc_str = f"{countries} | {cities}" if countries else cities
+        loc_str = f"{countries} · {cities}" if countries and cities else countries or cities
         click.echo(
             f"{i:<4} {w['role']:<25} {w.get('experience', 'any'):<8} "
             f"{loc_str:<40} {w.get('poll_interval', 30)}m"

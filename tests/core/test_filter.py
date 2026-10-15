@@ -62,14 +62,70 @@ def test_experience_senior():
 def test_experience_junior():
     assert matches_experience(_job("Junior Developer"), "junior")
 
-def test_experience_mid_no_prefix():
-    assert matches_experience(_job("Backend Engineer"), "mid")
+def test_experience_mid_explicit():
+    assert matches_experience(_job("Mid-Level Backend Engineer"), "mid")
+
+
+def test_experience_mid_sde2():
+    assert matches_experience(_job("SDE-2"), "mid")
 
 def test_experience_any():
     assert matches_experience(_job("Staff Engineer"), "any")
 
 def test_experience_senior_rejects_junior():
     assert not matches_experience(_job("Junior Developer"), "senior")
+
+
+def test_experience_intern():
+    assert matches_experience(_job("Software Engineering Intern"), "intern")
+
+
+def test_experience_intern_rejects_senior():
+    assert not matches_experience(_job("Senior Engineer"), "intern")
+
+
+def test_experience_entry_level():
+    assert matches_experience(_job("Entry Level Developer"), "entry_level")
+
+
+def test_experience_entry_level_fresh_grad():
+    assert matches_experience(_job("Fresh Graduate Engineer"), "entry_level")
+
+
+def test_experience_staff():
+    assert matches_experience(_job("Staff Engineer"), "staff")
+
+
+def test_experience_staff_lead():
+    assert matches_experience(_job("Lead Backend Engineer"), "staff")
+
+
+def test_experience_principal():
+    assert matches_experience(_job("Principal Engineer"), "principal")
+
+
+def test_experience_principal_architect():
+    assert matches_experience(_job("Software Architect"), "principal")
+
+
+def test_experience_manager():
+    assert matches_experience(_job("Engineering Manager"), "manager")
+
+
+def test_experience_manager_head():
+    assert matches_experience(_job("Head of Engineering"), "manager")
+
+
+def test_experience_director():
+    assert matches_experience(_job("Director of Engineering"), "director")
+
+
+def test_experience_director_vp():
+    assert matches_experience(_job("VP Engineering"), "director")
+
+
+def test_experience_sde_i_matches_junior():
+    assert matches_experience(_job("SDE I"), "junior")
 
 
 # Combined filter

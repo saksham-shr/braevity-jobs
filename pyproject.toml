@@ -12,7 +12,7 @@ dependencies = [
     "aiohttp>=3.9",
     "openpyxl>=3.1",
     "pyyaml>=6.0",
-    "plyer>=2.1",
+    "textual>=0.40",
 ]
 
 [project.scripts]
