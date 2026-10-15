@@ -100,8 +100,6 @@ async def run_fast_cycle(
         logger.info("Cross-ref discovered %d new boards", discovered)
 
     new_jobs = [j for j in all_jobs if not store.is_seen(j.url)]
-    if new_jobs:
-        store.mark_seen_batch(new_jobs)
 
     registry.close()
     store.close()
@@ -142,9 +140,7 @@ async def run_slow_cycle(
                 all_jobs.extend(result)
 
     new_jobs = [j for j in all_jobs if not store.is_seen(j.url)]
-    if new_jobs:
-        store.mark_seen_batch(new_jobs)
-
+    
     registry.close()
     store.close()
     return len(new_jobs), new_jobs
@@ -155,11 +151,14 @@ async def run_scan_cycle(
 ) -> int:
     from braevity.config import config_dir
     registry_path = config_dir() / "registry.db"
+    store = DedupStore(db_path)
     _, new_jobs = await run_fast_cycle(config, db_path, registry_path)
     filtered = filter_jobs(new_jobs, watch)
     if filtered:
         excel_path = config.get("excel_path", ".")
         export_jobs(filtered, excel_path)
+        store.mark_seen_batch(filtered)
+    store.close()
     return len(filtered)
 
 
@@ -182,6 +181,7 @@ async def run_scheduler(config: dict) -> None:
     while True:
         cycle_count += 1
         total_new = 0
+        store = DedupStore(db_path)
 
         _, fast_jobs = await run_fast_cycle(config, db_path, registry_path)
         for watch in watches:
@@ -190,6 +190,7 @@ async def run_scheduler(config: dict) -> None:
                 excel_path = config.get("excel_path", ".")
                 export_jobs(filtered, excel_path)
                 _notify(filtered, watch["role"], config)
+                store.mark_seen_batch(filtered)
                 total_new += len(filtered)
 
         if cycle_count % cycles_per_slow == 0:
@@ -200,8 +201,11 @@ async def run_scheduler(config: dict) -> None:
                     excel_path = config.get("excel_path", ".")
                     export_jobs(filtered, excel_path)
                     _notify(filtered, watch["role"], config)
+                    store.mark_seen_batch(filtered)
                     total_new += len(filtered)
             logger.info("Slow cycle complete.")
+
+        store.close()
 
         if total_new == 0:
             logger.info("No new jobs. Next fast scan in %d min.", fast_interval)
