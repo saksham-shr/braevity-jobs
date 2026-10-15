@@ -49,31 +49,66 @@ Displayed on interactive mode launch:
 
 Rendered in `primary` orange via `rich.console.Console`. Version read from `pyproject.toml` or hardcoded.
 
-## 3. Interactive Menu
+## 3. Interactive REPL
 
 On `braevity` (no subcommand):
 
-1. Print banner
-2. Show quick status line: `3 watches · 469 jobs tracked · last scan: 10:03`
-3. Present menu via `prompt_toolkit` select list:
+1. Print banner in primary orange
+2. Show status line: `3 watches · 469 jobs tracked · last scan: 10:03`
+3. If first run (no config.yaml): show `Welcome! Type 'init' to set up, or 'help' for commands.`
+4. Show `braevity>` prompt (bold primary orange `#E84A1E`) with command autocomplete
+
+### REPL Commands
+
+Type commands at `braevity>` prompt. `prompt_toolkit` provides inline autocomplete.
+
+| Command    | Description                |
+|-----------|----------------------------|
+| `init`     | Set up Braevity config     |
+| `watch`    | Add a new job watch        |
+| `list`     | View all configured watches|
+| `remove`   | Remove a watch by number   |
+| `start`    | Start monitoring           |
+| `status`   | Show current status        |
+| `discover` | Run board discovery cycle  |
+| `boards`   | Manage board registry      |
+| `help`     | Show available commands    |
+| `exit`     | Exit Braevity              |
+
+### Keyboard Shortcuts
+
+- **Ctrl+C** during sub-prompt (e.g. watch flow): cancel current action, return to `braevity>` prompt
+- **Ctrl+C** at main prompt: exit REPL
+- **Ctrl+D** at main prompt: exit REPL (EOF, standard REPL convention)
+- **Tab**: trigger autocomplete for commands
+
+### Unknown Commands
 
 ```
-  What would you like to do?
-
-  › Set up Braevity (init)
-    Add a watch
-    View watches
-    Remove a watch
-    Start monitoring
-    View status
-    Discover boards
-    Manage boards
-    Exit
+braevity> foo
+Unknown command 'foo'. Type 'help' for available commands.
+braevity>
 ```
 
-Arrow keys to navigate, Enter to select. After action completes, return to menu. Ctrl+C exits cleanly.
+### Help Output
 
-Status line refreshes each time menu renders.
+```
+braevity> help
+
+  Commands:
+    init      Set up Braevity config
+    watch     Add a new job watch
+    list      View all configured watches
+    remove    Remove a watch by number
+    start     Start monitoring
+    status    Show current status
+    discover  Run board discovery cycle
+    boards    Manage board registry
+    help      Show this help
+    exit      Exit Braevity
+```
+
+Status line does NOT refresh on every prompt. Shown once on launch.
 
 ## 4. Smart Inputs with Autocomplete
 
@@ -115,21 +150,29 @@ Comma-separated input supported. Autocomplete triggers per token after comma.
 
 ### Experience Picker
 
-Select list (not free text):
+Inline numbered list (not radiolist_dialog, not autocomplete):
 
 ```
+braevity> watch
+Role: backend engineer
+Location: India, Bangalore
+
   Experience level:
-  › Any
-    Intern
-    Entry Level
-    Junior
-    Mid
-    Senior
-    Staff / Lead
-    Principal
-    Manager
-    Director+
+   1. Any
+   2. Intern
+   3. Entry Level
+   4. Junior
+   5. Mid
+   6. Senior
+   7. Staff / Lead
+   8. Principal
+   9. Manager
+  10. Director+
+
+Pick [1-10]: 4
 ```
+
+User types number, Enter. Invalid input re-prompts.
 
 ### Experience Filter Logic Update
 
@@ -154,22 +197,22 @@ New mapping for matching job titles/descriptions:
 
 ### Scan Progress
 
-During `start` (both interactive and subcommand):
+During `start` (both interactive and subcommand), inline markers per source:
 
 ```
-  ● Scanning aggregators...
-  ✓ RemoteOK         99 jobs   [████████████████████]
-  ✓ Jobicy            50 jobs   [████████████████████]
-  ✓ Arbeitnow        300 jobs   [████████████████████]
-  ✓ Himalayas         20 jobs   [████████████████████]
+  Scanning...
+  ✓ RemoteOK          99 jobs
+  ✓ Jobicy             50 jobs
+  ✗ Arbeitnow          (timeout)
+  ✓ Himalayas          20 jobs
 
-  ✓ 26 new jobs matched · exported to D:/jobs.xlsx
+  3/4 sources OK, 26 new jobs · exported to ~/.braevity/exports/jobs.xlsx
   ⏰ Next scan in 10 min
 ```
 
-- `rich.progress.Progress` for per-source bars (orange fill)
-- Green `✓` on success, red `✗` on failure
-- Job count in white, source names in orange
+- Green `✓` on success, red `✗` on failure (uses existing `on_progress` callback)
+- Summary line: `N/M sources OK, X new jobs`
+- No progress bars (YAGNI for CLI)
 
 ### Watch List Table
 
@@ -218,17 +261,21 @@ Alongside toast, print in terminal:
 ### Flow
 
 ```
-braevity (no args) → tui.py:main_menu()
-  ├── banner + status
-  ├── menu loop (prompt_toolkit select)
-  │   ├── init → prompts.py (styled inputs)
-  │   ├── watch → prompts.py (autocomplete role/location, select experience)
+braevity (no args) → tui.py:main_repl()
+  ├── banner + status line
+  ├── first-run check → "Welcome! Type 'init'..." if no config
+  ├── REPL loop (prompt_toolkit.prompt with WordCompleter)
+  │   ├── init → prompts.py (styled inputs, excel defaults to ~/.braevity/exports/)
+  │   ├── watch → prompts.py (autocomplete role/location, numbered experience picker)
   │   ├── list → rich.table
   │   ├── remove → numbered select
-  │   ├── start → scheduler with rich.progress
+  │   ├── start → scheduler with inline ✓/✗ markers
   │   ├── status → rich panel
-  │   └── exit
-  └── Ctrl+C → clean exit
+  │   ├── help → command list
+  │   ├── exit → clean exit
+  │   └── <unknown> → "Unknown command 'foo'. Type 'help'..."
+  ├── Ctrl+C → exit REPL
+  └── Ctrl+D → exit REPL (EOFError)
 
 braevity start  → commands.py (Click, with rich output)
 braevity watch  → commands.py (Click, plain prompts)
