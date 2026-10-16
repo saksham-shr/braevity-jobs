@@ -32,7 +32,7 @@ def seed_registry(registry: BoardRegistry) -> int:
                     if registry.register(ats, url, company_name=token, discovered_from="seed"):
                         count += 1
                 else:
-                    if registry.register(ats, entry, discovered_from="seed"):
+                    if registry.register(ats, entry, company_name=entry, discovered_from="seed"):
                         count += 1
     return count
 

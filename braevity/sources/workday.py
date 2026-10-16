@@ -14,24 +14,33 @@ class WorkdaySource(BaseSource):
     name = "workday"
 
     async def fetch_jobs(self, session: ClientSession, company: dict) -> list[Job]:
-        base_url = (company.get("url") or company.get("token", "")).rstrip("/")
+        raw = (company.get("url") or company.get("token", "")).rstrip("/")
+        # Workday's CXS API path needs the tenant's "career site" identifier,
+        # which is an arbitrary name the company picked (e.g. NVIDIA's is
+        # "NVIDIAExternalCareerSite", not "nvidia") — it cannot be derived
+        # from the subdomain. Registry tokens carry it as "url#site_name";
+        # without that suffix there is no reliable way to guess it, so we
+        # refuse rather than silently querying a URL that 404s as "0 jobs".
+        if "#" in raw:
+            base_url, company_id = raw.split("#", 1)
+        else:
+            base_url, company_id = raw, company.get("company_id")
+        base_url = base_url.rstrip("/")
+
+        if not company_id:
+            logger.warning(
+                "Workday %s has no career-site id (expected token format "
+                "'url#site_name') — skipping rather than guessing",
+                company.get("name", base_url),
+            )
+            return []
+
         parsed = urlparse(base_url)
         hostname = parsed.hostname
-
         if not hostname:
-            token = base_url.split("/")[0]
-            base_url = f"https://{token}.wd5.myworkdayjobs.com"
-            hostname = f"{token}.wd5.myworkdayjobs.com"
-            parsed = urlparse(base_url)
-
-        if "myworkdayjobs.com" in hostname:
-            # ponytail: standard pattern nvidia.wd5.myworkdayjobs.com
-            subdomain = hostname.split(".")[0]
-            company_id = subdomain
-        else:
-            # ponytail: non-standard like jobs.careers.microsoft.com — use catalog override or hostname parts
-            subdomain = company.get("subdomain", hostname.split(".")[0])
-            company_id = company.get("company_id", subdomain)
+            logger.warning("Workday %s has no valid URL: %s", company.get("name", ""), base_url)
+            return []
+        subdomain = company.get("subdomain") or hostname.split(".")[0]
 
         cxs_url = f"{parsed.scheme}://{hostname}/wday/cxs/{subdomain}/{company_id}/jobs"
 
