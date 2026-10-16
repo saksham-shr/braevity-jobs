@@ -32,20 +32,18 @@ greenhouse:
   - canva
   - ramp
 
+# Every entry below was live-verified against https://api.lever.co/v0/postings/{org}
+# on 2026-10-15. The previous list (zepto, swiggy, postman, figma, unacademy,
+# coinswitch, chargebee, curefit, urbancompany, coindcx, netflix, nerdwallet,
+# lucidmotors) was checked and every single one 404s — none of those
+# companies are on Lever anymore (or never used that exact org slug). Org
+# tokens are case-sensitive; verify with a live curl before adding, not a guess.
 lever:
-  - zepto
-  - swiggy
-  - postman
-  - figma
-  - unacademy
-  - coinswitch
-  - chargebee
-  - curefit
-  - urbancompany
-  - coindcx
-  - netflix
-  - nerdwallet
-  - lucidmotors
+  - jobgether
+  - gohighlevel
+  - Sprinto
+  - paytm
+  - proof
 
 ashby:
   - linear
@@ -54,20 +52,42 @@ ashby:
   - ramp
   - notion
 
+# Workday tokens need the tenant's "career site" name appended after '#' —
+# it's a per-company name picked when they set up Workday, not derivable
+# from the subdomain (confirmed empirically: ~half the old bare-subdomain
+# entries here 404'd). Verified live on 2026-10-15 by checking each
+# company's real indexed myworkdayjobs.com URL. Don't add an entry without
+# the '#site_name' suffix verified the same way — WorkdaySource now refuses
+# to guess it and returns [] with a warning instead of silently 404ing.
 workday:
-  - microsoft:https://jobs.careers.microsoft.com
-  - netflix:https://jobs.netflix.com
-  - nvidia:https://nvidia.wd5.myworkdayjobs.com
-  - salesforce:https://salesforce.wd12.myworkdayjobs.com
-  - adobe:https://adobe.wd5.myworkdayjobs.com
-  - cisco:https://cisco.wd1.myworkdayjobs.com
-  - intel:https://intel.wd1.myworkdayjobs.com
-  - dell:https://dell.wd1.myworkdayjobs.com
-  - vmware:https://vmware.wd1.myworkdayjobs.com
-  - hp:https://hp.wd5.myworkdayjobs.com
-  - amd:https://amd.wd1.myworkdayjobs.com
-  - deloitte:https://deloitte.wd5.myworkdayjobs.com
-  - kpmg:https://kpmg.wd5.myworkdayjobs.com
-  - accenture:https://accenture.wd3.myworkdayjobs.com
-  - elastic:https://elastic.wd3.myworkdayjobs.com
-  - okta:https://okta.wd1.myworkdayjobs.com
+  - nvidia:https://nvidia.wd5.myworkdayjobs.com#NVIDIAExternalCareerSite
+  - salesforce:https://salesforce.wd12.myworkdayjobs.com#External_Career_Site
+  - adobe:https://adobe.wd5.myworkdayjobs.com#external_experienced
+  - cisco:https://cisco.wd5.myworkdayjobs.com#Cisco_Careers
+  - intel:https://intel.wd1.myworkdayjobs.com#External
+  - dell:https://dell.wd1.myworkdayjobs.com#External
+  - hp:https://hp.wd5.myworkdayjobs.com#ExternalCareerSite
+  - broadcom:https://broadcom.wd1.myworkdayjobs.com#External_Career
+  # Dropped, verified dead/wrong as of 2026-10-15:
+  # - vmware: acquired by Broadcom, no longer has its own Workday tenant (see broadcom above)
+  # - amd: migrated off Workday entirely, now at careers.amd.com (custom site, needs a dedicated scraper)
+  # - deloitte: one Workday tenant per country (e.g. deloitteie.wd3 for Ireland), not representable as a single token
+  # - microsoft, netflix: custom-built careers sites, not the standard myworkdayjobs.com CXS API this source expects
+  # Removed unverified, never re-add without checking the real URL first (same mistake as above):
+  # - kpmg, accenture, elastic, okta
+
+# Live-verified on 2026-10-15 against https://api.smartrecruiters.com/v1/companies/{slug}/postings.
+# Slugs are case-sensitive.
+smartrecruiters:
+  - Equinox
+
+# Live-verified on 2026-10-15 against https://apply.workable.com/api/v1/widget/accounts/{slug}.
+workable:
+  - huggingface
+  - rystad-energy
+  - tp-link-usa-corp
+
+# Live-verified on 2026-10-15 against https://{subdomain}.bamboohr.com/careers/list (unofficial endpoint).
+bamboohr:
+  - g2
+  - zapier

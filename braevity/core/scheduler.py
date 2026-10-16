@@ -14,6 +14,9 @@ from braevity.sources.greenhouse import GreenhouseSource
 from braevity.sources.lever import LeverSource
 from braevity.sources.workday import WorkdaySource
 from braevity.sources.ashby import AshbySource
+from braevity.sources.smartrecruiters import SmartRecruitersSource
+from braevity.sources.workable import WorkableSource
+from braevity.sources.bamboohr import BambooHRSource
 from braevity.sources.remoteok import RemoteOKSource
 from braevity.sources.jobicy import JobicySource
 from braevity.sources.arbeitnow import ArbeitnowSource
@@ -26,6 +29,9 @@ ATS_SOURCES = {
     "lever": LeverSource,
     "workday": WorkdaySource,
     "ashby": AshbySource,
+    "smartrecruiters": SmartRecruitersSource,
+    "workable": WorkableSource,
+    "bamboohr": BambooHRSource,
 }
 
 AGGREGATORS = [
@@ -40,6 +46,9 @@ ATS_LIMITS = {
     "lever": 5,
     "workday": 3,
     "ashby": 5,
+    "smartrecruiters": 5,
+    "workable": 5,
+    "bamboohr": 3,
 }
 
 AGGREGATOR_DELAY = 1.0
@@ -51,6 +60,9 @@ ATS_KEY_MAP = {
     "lever": "org",
     "ashby": "org",
     "workday": "url",
+    "smartrecruiters": "slug",
+    "workable": "slug",
+    "bamboohr": "subdomain",
 }
 
 

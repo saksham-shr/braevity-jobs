@@ -28,16 +28,16 @@ def test_workday_parses_jobs():
     session.post = AsyncMock(return_value=_mock_response(page1))
 
     company = {
-        "name": "Microsoft",
-        "url": "https://jobs.careers.microsoft.com",
+        "name": "NVIDIA",
+        "url": "https://nvidia.wd5.myworkdayjobs.com#NVIDIAExternalCareerSite",
     }
     jobs = asyncio.run(source.fetch_jobs(session, company))
 
     assert len(jobs) == 1
     assert jobs[0].title == "SDE-2"
-    assert jobs[0].company == "Microsoft"
+    assert jobs[0].company == "NVIDIA"
     assert jobs[0].source == "workday"
-    assert "microsoft.com" in jobs[0].url
+    assert "nvidia.wd5.myworkdayjobs.com" in jobs[0].url
 
 
 def test_workday_pagination_stops_on_empty():
@@ -47,7 +47,7 @@ def test_workday_pagination_stops_on_empty():
     session = AsyncMock()
     session.post = AsyncMock(side_effect=[_mock_response(page1), _mock_response(page2)])
 
-    company = {"name": "Test", "url": "https://test.myworkdayjobs.com"}
+    company = {"name": "Test", "url": "https://test.myworkdayjobs.com#ExternalCareerSite"}
     jobs = asyncio.run(source.fetch_jobs(session, company))
     assert len(jobs) == 20
     assert session.post.call_count == 2
@@ -76,19 +76,15 @@ def test_workday_nonstandard_url_with_override():
 
 
 def test_workday_bare_token_no_crash():
-    """Cross-ref discovered boards store bare tokens like 'nvidia' (issue #10)."""
+    """A token with no '#site_name' suffix and no company_id override can't
+    be resolved to Workday's real career-site id (it's an arbitrary name
+    the company picked, not derivable from the subdomain) — must return []
+    without crashing rather than guess and silently 404."""
     source = WorkdaySource()
-    page1 = {
-        "jobPostings": [
-            {"title": "GPU Engineer", "externalPath": "/job/456", "postedOn": "Today"},
-        ]
-    }
     session = AsyncMock()
-    session.post = AsyncMock(return_value=_mock_response(page1))
+    session.post = AsyncMock()
 
     company = {"name": "NVIDIA", "url": "nvidia"}
     jobs = asyncio.run(source.fetch_jobs(session, company))
-    assert len(jobs) == 1
-    assert "nvidia" in jobs[0].url
-    call_url = session.post.call_args[0][0]
-    assert "nvidia.wd5.myworkdayjobs.com" in call_url
+    assert jobs == []
+    session.post.assert_not_called()
