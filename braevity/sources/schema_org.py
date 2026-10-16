@@ -3,6 +3,7 @@ import logging
 import re
 from aiohttp import ClientSession
 from braevity.core.models import Job
+from braevity.sources.base import BaseSource
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,16 @@ class SchemaOrgScraper:
         if isinstance(value, (int, float)):
             return int(value), int(value), currency
         return None, None, currency
+
+
+class SchemaOrgSource(BaseSource):
+    name = "schema_org"
+
+    async def fetch_jobs(self, session: ClientSession, company: dict) -> list[Job]:
+        url = company.get("url") or company.get("token", "")
+        if not url:
+            return []
+        return await SchemaOrgScraper().scrape_page(session, url)
 
 
 def _parse_int(val) -> int | None:

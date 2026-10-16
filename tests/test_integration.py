@@ -52,15 +52,7 @@ def test_scan_cycle_end_to_end(mock_discover, mock_aggs, tmp_path):
     count, jobs = asyncio.run(run_fast_cycle({}, db_path, reg_path))
     assert count == 2
 
-    # Dedup moved to caller — fast_cycle returns same jobs until caller marks seen
+    # run_fast_cycle now marks every fetched job seen itself (Task 1 fix) —
+    # a second call with the same jobs returns 0, not reprocessed forever.
     count2, jobs2 = asyncio.run(run_fast_cycle({}, db_path, reg_path))
-    assert count2 == 2
-
-    # After marking seen, dedup kicks in
-    from braevity.core.dedup import DedupStore
-    store = DedupStore(db_path)
-    store.mark_seen_batch(jobs)
-    store.close()
-
-    count3, jobs3 = asyncio.run(run_fast_cycle({}, db_path, reg_path))
-    assert count3 == 0
+    assert count2 == 0
