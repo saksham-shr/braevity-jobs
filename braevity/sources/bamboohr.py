@@ -1,5 +1,6 @@
 import logging
 from aiohttp import ClientSession
+from braevity.core.http import fetch
 from braevity.core.models import Job
 from braevity.sources.base import BaseSource
 
@@ -18,7 +19,9 @@ class BambooHRSource(BaseSource):
         subdomain = company.get("subdomain") or company.get("token", "")
         url = BAMBOOHR_API.format(subdomain=subdomain)
         try:
-            resp = await session.get(url, headers=HEADERS)
+            resp = await fetch(session, "GET", url, headers=HEADERS)
+            if resp is None:
+                return []
             if resp.status != 200:
                 logger.warning("BambooHR %s returned %d", subdomain, resp.status)
                 return []

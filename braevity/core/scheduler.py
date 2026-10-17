@@ -169,7 +169,9 @@ async def run_slow_cycle(
                         return jobs
                     except Exception as e:
                         logger.warning("ATS %s board %s failed: %s", board["ats"], board["token"], e)
-                        registry.record_failure(board["id"])
+                        # An unexpected exception here is likely transient (network blip,
+                        # bug in a new adapter) — not proof the board is actually gone.
+                        registry.record_failure(board["id"], terminal=False)
                         return []
 
             tasks = [fetch_board(source, b, session, sem) for b in boards]
