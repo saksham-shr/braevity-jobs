@@ -1,6 +1,9 @@
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class BoardRegistry:
@@ -66,7 +69,10 @@ class BoardRegistry:
         )
         self._conn.commit()
 
-    def record_failure(self, board_id: str) -> None:
+    def record_failure(self, board_id: str, terminal: bool = True) -> None:
+        if not terminal:
+            logger.info("Board %s hit a transient failure — not counted toward deactivation", board_id)
+            return
         self._conn.execute(
             "UPDATE board_registry SET fail_count = fail_count + 1 WHERE id = ?",
             (board_id,),

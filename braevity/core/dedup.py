@@ -17,6 +17,11 @@ class DedupStore:
             "CREATE INDEX IF NOT EXISTS idx_content_hash "
             "ON seen_jobs(content_hash)"
         )
+        self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS delivered_jobs ("
+            "url TEXT, watch_role TEXT, delivered_at TEXT, "
+            "PRIMARY KEY(url, watch_role))"
+        )
         self._conn.commit()
 
     def is_seen(self, url: str) -> bool:
@@ -49,6 +54,20 @@ class DedupStore:
             "ON CONFLICT(url) DO UPDATE SET last_seen = excluded.last_seen",
             [(j.url, j.content_hash(), j.title, j.company,
               j.source, j.found_at, j.found_at) for j in jobs],
+        )
+        self._conn.commit()
+
+    def is_delivered(self, url: str, watch_role: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM delivered_jobs WHERE url = ? AND watch_role = ?",
+            (url, watch_role),
+        ).fetchone()
+        return row is not None
+
+    def mark_delivered_batch(self, jobs: list[Job], watch_role: str) -> None:
+        self._conn.executemany(
+            "INSERT OR IGNORE INTO delivered_jobs (url, watch_role, delivered_at) VALUES (?, ?, ?)",
+            [(j.url, watch_role, j.found_at) for j in jobs],
         )
         self._conn.commit()
 

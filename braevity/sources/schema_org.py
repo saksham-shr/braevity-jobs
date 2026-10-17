@@ -2,7 +2,9 @@ import json
 import logging
 import re
 from aiohttp import ClientSession
+from braevity.core.http import fetch
 from braevity.core.models import Job
+from braevity.sources.base import BaseSource
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +19,8 @@ class SchemaOrgScraper:
 
     async def scrape_page(self, session: ClientSession, url: str) -> list[Job]:
         try:
-            resp = await session.get(
-                url, headers={"User-Agent": "braevity/0.1"}, timeout=15
-            )
-            if resp.status != 200:
+            resp = await fetch(session, "GET", url, headers={"User-Agent": "braevity/0.1"})
+            if resp is None or resp.status != 200:
                 return []
             html = await resp.text()
         except Exception as e:
@@ -122,6 +122,16 @@ class SchemaOrgScraper:
         if isinstance(value, (int, float)):
             return int(value), int(value), currency
         return None, None, currency
+
+
+class SchemaOrgSource(BaseSource):
+    name = "schema_org"
+
+    async def fetch_jobs(self, session: ClientSession, company: dict) -> list[Job]:
+        url = company.get("url") or company.get("token", "")
+        if not url:
+            return []
+        return await SchemaOrgScraper().scrape_page(session, url)
 
 
 def _parse_int(val) -> int | None:

@@ -1,5 +1,6 @@
 import logging
 from aiohttp import ClientSession
+from braevity.core.http import fetch
 from braevity.core.models import Job
 from braevity.sources.base import BaseSource
 
@@ -21,7 +22,9 @@ class SmartRecruitersSource(BaseSource):
         for _ in range(MAX_PAGES):
             url = f"{SMARTRECRUITERS_API.format(slug=slug)}?limit={PAGE_SIZE}&offset={offset}"
             try:
-                resp = await session.get(url)
+                resp = await fetch(session, "GET", url)
+                if resp is None:
+                    break
                 if resp.status != 200:
                     logger.warning("SmartRecruiters %s returned %d", slug, resp.status)
                     break
