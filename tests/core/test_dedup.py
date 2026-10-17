@@ -78,3 +78,30 @@ def test_is_duplicate_content_same_source_not_duplicate(tmp_path):
     store.mark_seen(job)
     assert store.is_duplicate_content(job) is False
     store.close()
+
+
+def test_not_delivered_until_marked(tmp_path):
+    store = DedupStore(tmp_path / "test.db")
+    assert not store.is_delivered("https://example.com/job/1", "backend")
+
+
+def test_mark_delivered_then_is_delivered(tmp_path):
+    store = DedupStore(tmp_path / "test.db")
+    job = _make_job()
+    store.mark_delivered_batch([job], "backend")
+    assert store.is_delivered(job.url, "backend")
+
+
+def test_delivered_is_per_watch_role(tmp_path):
+    store = DedupStore(tmp_path / "test.db")
+    job = _make_job()
+    store.mark_delivered_batch([job], "backend")
+    assert not store.is_delivered(job.url, "frontend")
+
+
+def test_mark_delivered_batch_idempotent(tmp_path):
+    store = DedupStore(tmp_path / "test.db")
+    job = _make_job()
+    store.mark_delivered_batch([job], "backend")
+    store.mark_delivered_batch([job], "backend")
+    assert store.is_delivered(job.url, "backend")

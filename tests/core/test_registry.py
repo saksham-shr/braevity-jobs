@@ -49,6 +49,17 @@ def test_record_failure_deactivates_at_three(tmp_path):
     reg.close()
 
 
+def test_record_failure_transient_does_not_deactivate(tmp_path):
+    reg = BoardRegistry(tmp_path / "reg.db")
+    reg.register("greenhouse", "flaky", "Flaky", "seed")
+    reg.record_failure("greenhouse:flaky", terminal=False)
+    reg.record_failure("greenhouse:flaky", terminal=False)
+    reg.record_failure("greenhouse:flaky", terminal=False)
+    reg.record_failure("greenhouse:flaky", terminal=False)
+    assert len(reg.get_active_boards()) == 1
+    reg.close()
+
+
 def test_update_after_fetch_resets_fail_count(tmp_path):
     reg = BoardRegistry(tmp_path / "reg.db")
     reg.register("greenhouse", "flaky", "Flaky", "seed")

@@ -1,5 +1,6 @@
 import logging
 from aiohttp import ClientSession
+from braevity.core.http import fetch
 from braevity.core.models import Job
 from braevity.sources.base import BaseSource
 
@@ -29,8 +30,8 @@ class AshbySource(BaseSource):
     async def fetch_jobs(self, session: ClientSession, company: dict) -> list[Job]:
         org = company.get("org") or company.get("token", "")
         try:
-            resp = await session.post(
-                ASHBY_API,
+            resp = await fetch(
+                session, "POST", ASHBY_API,
                 json={
                     "operationName": "ApiJobBoardWithTeams",
                     "variables": {"organizationHostedJobsPageName": org},
@@ -38,6 +39,8 @@ class AshbySource(BaseSource):
                 },
                 headers={"Accept": "application/json", "Content-Type": "application/json"},
             )
+            if resp is None:
+                return []
             if resp.status != 200:
                 logger.warning("Ashby %s returned %d", org, resp.status)
                 return []

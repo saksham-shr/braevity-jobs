@@ -17,6 +17,7 @@ from braevity.sources.ashby import AshbySource
 from braevity.sources.smartrecruiters import SmartRecruitersSource
 from braevity.sources.workable import WorkableSource
 from braevity.sources.bamboohr import BambooHRSource
+from braevity.sources.schema_org import SchemaOrgSource
 from braevity.sources.remoteok import RemoteOKSource
 from braevity.sources.jobicy import JobicySource
 from braevity.sources.arbeitnow import ArbeitnowSource
@@ -32,6 +33,7 @@ ATS_SOURCES = {
     "smartrecruiters": SmartRecruitersSource,
     "workable": WorkableSource,
     "bamboohr": BambooHRSource,
+    "schema_org": SchemaOrgSource,
 }
 
 AGGREGATORS = [
@@ -49,6 +51,7 @@ ATS_LIMITS = {
     "smartrecruiters": 5,
     "workable": 5,
     "bamboohr": 3,
+    "schema_org": 3,
 }
 
 AGGREGATOR_DELAY = 1.0
@@ -63,6 +66,7 @@ ATS_KEY_MAP = {
     "smartrecruiters": "slug",
     "workable": "slug",
     "bamboohr": "subdomain",
+    "schema_org": "url",
 }
 
 
@@ -72,6 +76,21 @@ def _notify(jobs: list[Job], role: str, config: dict) -> None:
         send_notification(jobs, role, config["notification"])
     else:
         send_toast(jobs, role)
+
+
+def _dedup_cross_source(jobs: list[Job], store: DedupStore) -> list[Job]:
+    """Drop jobs whose content_hash matches an already-kept job from a
+    different source — both against prior cycles (via store) and within
+    this same batch (aggregators/ATSs can surface the same posting)."""
+    seen_hashes: set[str] = set()
+    result = []
+    for job in jobs:
+        h = job.content_hash()
+        if h in seen_hashes or store.is_duplicate_content(job):
+            continue
+        seen_hashes.add(h)
+        result.append(job)
+    return result
 
 
 def _board_to_company(board: dict) -> dict:
@@ -117,6 +136,8 @@ async def run_fast_cycle(
         logger.info("Cross-ref discovered %d new boards", discovered)
 
     new_jobs = [j for j in all_jobs if not store.is_seen(j.url)]
+    new_jobs = _dedup_cross_source(new_jobs, store)
+    store.mark_seen_batch(new_jobs)
 
     registry.close()
     store.close()
@@ -148,7 +169,9 @@ async def run_slow_cycle(
                         return jobs
                     except Exception as e:
                         logger.warning("ATS %s board %s failed: %s", board["ats"], board["token"], e)
-                        registry.record_failure(board["id"])
+                        # An unexpected exception here is likely transient (network blip,
+                        # bug in a new adapter) — not proof the board is actually gone.
+                        registry.record_failure(board["id"], terminal=False)
                         return []
 
             tasks = [fetch_board(source, b, session, sem) for b in boards]
@@ -157,7 +180,9 @@ async def run_slow_cycle(
                 all_jobs.extend(result)
 
     new_jobs = [j for j in all_jobs if not store.is_seen(j.url)]
-    
+    new_jobs = _dedup_cross_source(new_jobs, store)
+    store.mark_seen_batch(new_jobs)
+
     registry.close()
     store.close()
     return len(new_jobs), new_jobs
@@ -170,11 +195,14 @@ async def run_scan_cycle(
     registry_path = config_dir() / "registry.db"
     store = DedupStore(db_path)
     _, new_jobs = await run_fast_cycle(config, db_path, registry_path)
-    filtered = filter_jobs(new_jobs, watch)
+    filtered = [
+        j for j in filter_jobs(new_jobs, watch)
+        if not store.is_delivered(j.url, watch["role"])
+    ]
     if filtered:
         excel_path = config.get("excel_path", ".")
         export_jobs(filtered, excel_path)
-        store.mark_seen_batch(filtered)
+        store.mark_delivered_batch(filtered, watch["role"])
     store.close()
     return len(filtered)
 
@@ -202,23 +230,29 @@ async def run_scheduler(config: dict) -> None:
 
         _, fast_jobs = await run_fast_cycle(config, db_path, registry_path)
         for watch in watches:
-            filtered = filter_jobs(fast_jobs, watch)
+            filtered = [
+                j for j in filter_jobs(fast_jobs, watch)
+                if not store.is_delivered(j.url, watch["role"])
+            ]
             if filtered:
                 excel_path = config.get("excel_path", ".")
                 export_jobs(filtered, excel_path)
                 _notify(filtered, watch["role"], config)
-                store.mark_seen_batch(filtered)
+                store.mark_delivered_batch(filtered, watch["role"])
                 total_new += len(filtered)
 
         if cycle_count % cycles_per_slow == 0:
             _, slow_jobs = await run_slow_cycle(config, db_path, registry_path)
             for watch in watches:
-                filtered = filter_jobs(slow_jobs, watch)
+                filtered = [
+                    j for j in filter_jobs(slow_jobs, watch)
+                    if not store.is_delivered(j.url, watch["role"])
+                ]
                 if filtered:
                     excel_path = config.get("excel_path", ".")
                     export_jobs(filtered, excel_path)
                     _notify(filtered, watch["role"], config)
-                    store.mark_seen_batch(filtered)
+                    store.mark_delivered_batch(filtered, watch["role"])
                     total_new += len(filtered)
             logger.info("Slow cycle complete.")
 
