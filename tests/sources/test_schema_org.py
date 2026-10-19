@@ -119,3 +119,45 @@ def test_schema_org_source_404_raises_board_gone():
     session.get = AsyncMock(return_value=_mock_response("", status=404))
     with pytest.raises(BoardGoneError):
         asyncio.run(source.fetch_jobs(session, {"url": "https://acme.com/careers"}))
+
+
+def test_parse_posting_handles_list_joblocation():
+    """Schema.org allows jobLocation as an array of Place objects (seen on
+    Teamtailor's embedded JobPosting JSON-LD) — take the first entry."""
+    scraper = SchemaOrgScraper()
+    data = {
+        "@type": "JobPosting",
+        "title": "Nurse",
+        "hiringOrganization": {"name": "2Care"},
+        "jobLocation": [
+            {"address": {"addressLocality": "Lillestrøm", "addressCountry": "NO"}},
+        ],
+        "url": "https://2care.teamtailor.com/jobs/1",
+    }
+    job = scraper._parse_posting(data, "https://2care.teamtailor.com/jobs/1")
+    assert job.location == "Lillestrøm, NO"
+
+
+def test_parse_posting_empty_list_joblocation_returns_none_location():
+    scraper = SchemaOrgScraper()
+    data = {
+        "@type": "JobPosting",
+        "title": "Nurse",
+        "hiringOrganization": {"name": "2Care"},
+        "jobLocation": [],
+        "url": "https://x/1",
+    }
+    job = scraper._parse_posting(data, "https://x/1")
+    assert job.location is None
+
+
+def test_parse_posting_source_override():
+    scraper = SchemaOrgScraper()
+    data = {
+        "@type": "JobPosting",
+        "title": "Nurse",
+        "hiringOrganization": {"name": "2Care"},
+        "url": "https://x/1",
+    }
+    job = scraper._parse_posting(data, "https://x/1", source="teamtailor")
+    assert job.source == "teamtailor"

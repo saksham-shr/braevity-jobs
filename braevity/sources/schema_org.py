@@ -59,7 +59,7 @@ class SchemaOrgScraper:
                         jobs.append(job)
         return jobs
 
-    def _parse_posting(self, data: dict, page_url: str) -> Job | None:
+    def _parse_posting(self, data: dict, page_url: str, source: str | None = None) -> Job | None:
         if not isinstance(data, dict):
             return None
         if data.get("@type", "") != "JobPosting":
@@ -85,7 +85,7 @@ class SchemaOrgScraper:
             location=location,
             url=url,
             posted_date=data.get("datePosted"),
-            source=self.name,
+            source=source or self.name,
             salary_min=salary_min,
             salary_max=salary_max,
             salary_currency=currency,
@@ -99,6 +99,12 @@ class SchemaOrgScraper:
         loc = data.get("jobLocation")
         if not loc:
             return None
+        if isinstance(loc, list):
+            # Schema.org allows multiple locations; take the first — good
+            # enough for v1, same limitation noted for Recruitee multi-location.
+            loc = loc[0] if loc else None
+            if not loc:
+                return None
         if isinstance(loc, dict):
             addr = loc.get("address")
             if isinstance(addr, dict):
