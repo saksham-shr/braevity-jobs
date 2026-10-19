@@ -1,4 +1,6 @@
-from braevity.sources.schema_org import SchemaOrgScraper
+import asyncio
+from unittest.mock import AsyncMock
+from braevity.sources.schema_org import SchemaOrgScraper, SchemaOrgSource
 
 
 SAMPLE_HTML = '''
@@ -73,3 +75,37 @@ def test_parse_jsonld_array():
     assert len(jobs) == 2
     assert jobs[0].title == "Job A"
     assert jobs[1].title == "Job B"
+
+
+def _mock_response(text, status=200):
+    resp = AsyncMock()
+    resp.status = status
+    resp.text = AsyncMock(return_value=text)
+    return resp
+
+
+def test_schema_org_source_fetches_and_parses():
+    source = SchemaOrgSource()
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response(SAMPLE_HTML))
+
+    jobs = asyncio.run(source.fetch_jobs(session, {"url": "https://acme.com/careers"}))
+    assert len(jobs) == 1
+    assert jobs[0].title == "Senior Backend Engineer"
+    assert jobs[0].source == "schema.org"
+
+
+def test_schema_org_source_no_url_returns_empty():
+    source = SchemaOrgSource()
+    session = AsyncMock()
+    jobs = asyncio.run(source.fetch_jobs(session, {}))
+    assert jobs == []
+    session.get.assert_not_called()
+
+
+def test_schema_org_source_non_200_returns_empty():
+    source = SchemaOrgSource()
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response("", status=404))
+    jobs = asyncio.run(source.fetch_jobs(session, {"url": "https://acme.com/careers"}))
+    assert jobs == []
