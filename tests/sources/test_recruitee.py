@@ -1,6 +1,8 @@
 import asyncio
 import json
+import pytest
 from unittest.mock import AsyncMock, patch
+from braevity.sources.base import BoardGoneError
 from braevity.sources.recruitee import RecruiteeSource
 
 
@@ -112,11 +114,21 @@ def test_recruitee_empty_response():
 def test_recruitee_api_error_returns_empty():
     source = RecruiteeSource()
     session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response({}, status=403))
+
+    company = {"name": "Down", "slug": "down"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
+def test_recruitee_404_raises_board_gone():
+    source = RecruiteeSource()
+    session = AsyncMock()
     session.get = AsyncMock(return_value=_mock_response({}, status=404))
 
     company = {"name": "Gone", "slug": "gone"}
-    jobs = asyncio.run(source.fetch_jobs(session, company))
-    assert jobs == []
+    with pytest.raises(BoardGoneError):
+        asyncio.run(source.fetch_jobs(session, company))
 
 
 @patch("braevity.core.http.asyncio.sleep", new_callable=AsyncMock)

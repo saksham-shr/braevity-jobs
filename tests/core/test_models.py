@@ -83,12 +83,40 @@ def test_job_new_fields_defaults():
 
 def test_content_hash_deterministic():
     job1 = Job.from_fields(
-        title="Backend Engineer", company="Stripe", location=None,
+        title="Backend Engineer", company="Stripe", location="NYC",
         url="https://a.com/1", posted_date=None, source="greenhouse",
     )
     job2 = Job.from_fields(
         title="Backend Engineer", company="Stripe", location="NYC",
         url="https://b.com/2", posted_date=None, source="remoteok",
+    )
+    assert job1.content_hash() == job2.content_hash()
+
+
+def test_content_hash_differs_by_location():
+    """Same title+company at a different location is a distinct posting —
+    must not collapse into one (was the content_hash bug behind issue #30's
+    code review: title+company alone silently dropped genuinely different
+    postings)."""
+    job1 = Job.from_fields(
+        title="Backend Engineer", company="Stripe", location="NYC",
+        url="https://a.com/1", posted_date=None, source="greenhouse",
+    )
+    job2 = Job.from_fields(
+        title="Backend Engineer", company="Stripe", location="San Francisco",
+        url="https://a.com/2", posted_date=None, source="greenhouse",
+    )
+    assert job1.content_hash() != job2.content_hash()
+
+
+def test_content_hash_location_case_insensitive():
+    job1 = Job.from_fields(
+        title="SDE", company="Acme", location="  NYC  ",
+        url="https://a.com/1", posted_date=None, source="greenhouse",
+    )
+    job2 = Job.from_fields(
+        title="SDE", company="Acme", location="nyc",
+        url="https://a.com/2", posted_date=None, source="greenhouse",
     )
     assert job1.content_hash() == job2.content_hash()
 

@@ -65,5 +65,12 @@ class Job:
         )
 
     def content_hash(self) -> str:
-        key = f"{self.title.lower()}\x00{self.company.lower()}"
+        # Location is part of the identity on purpose: title+company alone
+        # collapses genuinely distinct postings (same role, different city/
+        # req) into one. A real cross-posted duplicate with a mismatched
+        # location string (e.g. an aggregator saying "Remote" for a job the
+        # source ATS lists as "NYC") is missed instead — a false negative
+        # is far cheaper than silently dropping a real, distinct job.
+        location_key = (self.location or "").strip().lower()
+        key = f"{self.title.lower()}\x00{self.company.lower()}\x00{location_key}"
         return sha256(key.encode()).hexdigest()

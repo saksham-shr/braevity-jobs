@@ -1,5 +1,7 @@
 import asyncio
+import pytest
 from unittest.mock import AsyncMock
+from braevity.sources.base import BoardGoneError
 from braevity.sources.schema_org import SchemaOrgScraper, SchemaOrgSource
 
 
@@ -106,6 +108,14 @@ def test_schema_org_source_no_url_returns_empty():
 def test_schema_org_source_non_200_returns_empty():
     source = SchemaOrgSource()
     session = AsyncMock()
-    session.get = AsyncMock(return_value=_mock_response("", status=404))
+    session.get = AsyncMock(return_value=_mock_response("", status=403))
     jobs = asyncio.run(source.fetch_jobs(session, {"url": "https://acme.com/careers"}))
     assert jobs == []
+
+
+def test_schema_org_source_404_raises_board_gone():
+    source = SchemaOrgSource()
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response("", status=404))
+    with pytest.raises(BoardGoneError):
+        asyncio.run(source.fetch_jobs(session, {"url": "https://acme.com/careers"}))

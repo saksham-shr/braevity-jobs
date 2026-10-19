@@ -1,9 +1,10 @@
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
-from braevity.core.scheduler import run_fast_cycle, run_slow_cycle, run_scheduler
+from braevity.core.scheduler import run_fast_cycle, run_slow_cycle, run_scheduler, run_scan_cycle
 from braevity.core.models import Job
 from braevity.core.registry import BoardRegistry
 from braevity.core.dedup import DedupStore
+from braevity.sources.base import BoardGoneError
 
 
 def _job(title="SDE", url="https://x.com/1"):
@@ -158,3 +159,91 @@ def test_same_watch_not_redelivered(mock_discover, mock_aggs, mock_config_dir, t
     assert store.is_delivered("https://x.com/1", "SDE")
     store.close()
     assert first == 1
+
+
+def test_board_gone_error_deactivates_after_three_terminal_failures(tmp_path):
+    """A source raising BoardGoneError (confirmed-dead board, e.g. 404)
+    must count toward deactivation — unlike a generic/transient exception,
+    which does not (issue #30 review: terminal status wasn't wired through,
+    so a dead board stayed active forever)."""
+    reg_path = tmp_path / "reg.db"
+    registry = BoardRegistry(reg_path)
+    registry.register("greenhouse", "gone", company_name="Gone")
+    registry.close()
+
+    fake_source = MagicMock()
+    fake_source.return_value = fake_source
+    fake_source.fetch_jobs = AsyncMock(side_effect=BoardGoneError("404"))
+
+    db_path = tmp_path / "seen.db"
+    with patch.dict("braevity.core.scheduler.ATS_SOURCES", {"greenhouse": fake_source}, clear=True), \
+         patch.dict("braevity.core.scheduler.ATS_LIMITS", {"greenhouse": 5}, clear=True):
+        asyncio.run(run_slow_cycle({}, db_path, reg_path))
+        asyncio.run(run_slow_cycle({}, db_path, reg_path))
+        registry = BoardRegistry(reg_path)
+        assert len(registry.get_active_boards()) == 1
+        registry.close()
+        asyncio.run(run_slow_cycle({}, db_path, reg_path))
+
+    registry = BoardRegistry(reg_path)
+    assert len(registry.get_active_boards()) == 0
+    registry.close()
+
+
+def test_generic_exception_does_not_deactivate_board(tmp_path):
+    """A plain exception (network blip, bug) stays transient — it must
+    not count toward deactivation the way a confirmed-dead board does."""
+    reg_path = tmp_path / "reg.db"
+    registry = BoardRegistry(reg_path)
+    registry.register("greenhouse", "flaky", company_name="Flaky")
+    registry.close()
+
+    fake_source = MagicMock()
+    fake_source.return_value = fake_source
+    fake_source.fetch_jobs = AsyncMock(side_effect=RuntimeError("boom"))
+
+    db_path = tmp_path / "seen.db"
+    with patch.dict("braevity.core.scheduler.ATS_SOURCES", {"greenhouse": fake_source}, clear=True), \
+         patch.dict("braevity.core.scheduler.ATS_LIMITS", {"greenhouse": 5}, clear=True):
+        for _ in range(5):
+            asyncio.run(run_slow_cycle({}, db_path, reg_path))
+
+    registry = BoardRegistry(reg_path)
+    assert len(registry.get_active_boards()) == 1
+    registry.close()
+
+
+@patch("braevity.config.config_dir")
+@patch("braevity.core.scheduler.AGGREGATORS")
+@patch("braevity.core.scheduler.discover_from_jobs", return_value=0)
+def test_export_failure_persists_job_for_retry(mock_discover, mock_aggs, mock_config_dir, tmp_path):
+    """If export/notify crashes, the job must not be lost — it's already
+    marked seen (fetch-dedup) so it won't come back from a future fetch.
+    It must be retried on the next scan instead (issue #30 review)."""
+    mock_config_dir.return_value = tmp_path
+    fake_agg = MagicMock()
+    fake_agg.name = "fake"
+    fake_agg.fetch_all_jobs = AsyncMock(return_value=[_job(title="SDE")])
+    mock_aggs.__iter__ = lambda s: iter([fake_agg])
+
+    db_path = tmp_path / "seen.db"
+    watch = {"role": "SDE", "experience": "any", "locations": {}}
+
+    with patch("braevity.core.scheduler.export_jobs", side_effect=OSError("disk full")):
+        count = asyncio.run(run_scan_cycle(watch, {"excel_path": str(tmp_path)}, db_path))
+    assert count == 0
+
+    store = DedupStore(db_path)
+    assert not store.is_delivered("https://x.com/1", "SDE")
+    pending = store.get_pending("SDE")
+    assert len(pending) == 1
+    assert pending[0].url == "https://x.com/1"
+    store.close()
+
+    # Next scan (export working again) must retry and deliver the pending job.
+    second = asyncio.run(run_scan_cycle(watch, {"excel_path": str(tmp_path)}, db_path))
+    assert second == 1
+    store = DedupStore(db_path)
+    assert store.is_delivered("https://x.com/1", "SDE")
+    assert store.get_pending("SDE") == []
+    store.close()

@@ -10,6 +10,7 @@ from braevity.core.exporter import export_jobs
 from braevity.core.toast import send_toast
 from braevity.core.migration import seed_registry, migrate_catalog
 from braevity.sources.crossref import discover_from_jobs
+from braevity.sources.base import BoardGoneError
 from braevity.sources.greenhouse import GreenhouseSource
 from braevity.sources.lever import LeverSource
 from braevity.sources.workday import WorkdaySource
@@ -18,6 +19,7 @@ from braevity.sources.smartrecruiters import SmartRecruitersSource
 from braevity.sources.workable import WorkableSource
 from braevity.sources.bamboohr import BambooHRSource
 from braevity.sources.recruitee import RecruiteeSource
+from braevity.sources.breezyhr import BreezyHRSource
 from braevity.sources.schema_org import SchemaOrgSource
 from braevity.sources.remoteok import RemoteOKSource
 from braevity.sources.jobicy import JobicySource
@@ -35,6 +37,7 @@ ATS_SOURCES = {
     "workable": WorkableSource,
     "bamboohr": BambooHRSource,
     "recruitee": RecruiteeSource,
+    "breezyhr": BreezyHRSource,
     "schema_org": SchemaOrgSource,
 }
 
@@ -54,6 +57,7 @@ ATS_LIMITS = {
     "workable": 5,
     "bamboohr": 3,
     "recruitee": 5,
+    "breezyhr": 5,
     "schema_org": 3,
 }
 
@@ -70,6 +74,7 @@ ATS_KEY_MAP = {
     "workable": "slug",
     "bamboohr": "subdomain",
     "recruitee": "slug",
+    "breezyhr": "slug",
     "schema_org": "url",
 }
 
@@ -95,6 +100,32 @@ def _dedup_cross_source(jobs: list[Job], store: DedupStore) -> list[Job]:
         seen_hashes.add(h)
         result.append(job)
     return result
+
+
+def _deliver(
+    store: DedupStore, jobs: list[Job], watch_role: str, config: dict, notify: bool,
+) -> int:
+    """Export (+ notify) a batch for one watch. On failure, persist the
+    batch as pending instead of losing it — the jobs are already marked
+    seen (fetch-dedup) and won't come back from a future fetch, so a crash
+    here must not be the only copy of "this still needs delivering"."""
+    pending = store.get_pending(watch_role)
+    pending_urls = {p.url for p in pending}
+    to_deliver = pending + [j for j in jobs if j.url not in pending_urls]
+    if not to_deliver:
+        return 0
+    try:
+        excel_path = config.get("excel_path", ".")
+        export_jobs(to_deliver, excel_path)
+        if notify:
+            _notify(to_deliver, watch_role, config)
+    except Exception as e:
+        logger.error("Delivery failed for watch %s, queued for retry: %s", watch_role, e)
+        store.add_pending_batch(to_deliver, watch_role)
+        return 0
+    store.mark_delivered_batch(to_deliver, watch_role)
+    store.clear_pending_batch(to_deliver, watch_role)
+    return len(to_deliver)
 
 
 def _board_to_company(board: dict) -> dict:
@@ -171,6 +202,10 @@ async def run_slow_cycle(
                         jobs = await src.fetch_jobs(s, company)
                         registry.update_after_fetch(board["id"], len(jobs))
                         return jobs
+                    except BoardGoneError as e:
+                        logger.warning("ATS %s board %s is gone: %s", board["ats"], board["token"], e)
+                        registry.record_failure(board["id"], terminal=True)
+                        return []
                     except Exception as e:
                         logger.warning("ATS %s board %s failed: %s", board["ats"], board["token"], e)
                         # An unexpected exception here is likely transient (network blip,
@@ -203,12 +238,9 @@ async def run_scan_cycle(
         j for j in filter_jobs(new_jobs, watch)
         if not store.is_delivered(j.url, watch["role"])
     ]
-    if filtered:
-        excel_path = config.get("excel_path", ".")
-        export_jobs(filtered, excel_path)
-        store.mark_delivered_batch(filtered, watch["role"])
+    count = _deliver(store, filtered, watch["role"], config, notify=False)
     store.close()
-    return len(filtered)
+    return count
 
 
 async def run_scheduler(config: dict) -> None:
@@ -238,12 +270,7 @@ async def run_scheduler(config: dict) -> None:
                 j for j in filter_jobs(fast_jobs, watch)
                 if not store.is_delivered(j.url, watch["role"])
             ]
-            if filtered:
-                excel_path = config.get("excel_path", ".")
-                export_jobs(filtered, excel_path)
-                _notify(filtered, watch["role"], config)
-                store.mark_delivered_batch(filtered, watch["role"])
-                total_new += len(filtered)
+            total_new += _deliver(store, filtered, watch["role"], config, notify=True)
 
         if cycle_count % cycles_per_slow == 0:
             _, slow_jobs = await run_slow_cycle(config, db_path, registry_path)
@@ -252,12 +279,7 @@ async def run_scheduler(config: dict) -> None:
                     j for j in filter_jobs(slow_jobs, watch)
                     if not store.is_delivered(j.url, watch["role"])
                 ]
-                if filtered:
-                    excel_path = config.get("excel_path", ".")
-                    export_jobs(filtered, excel_path)
-                    _notify(filtered, watch["role"], config)
-                    store.mark_delivered_batch(filtered, watch["role"])
-                    total_new += len(filtered)
+                total_new += _deliver(store, filtered, watch["role"], config, notify=True)
             logger.info("Slow cycle complete.")
 
         store.close()

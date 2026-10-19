@@ -4,7 +4,7 @@ import re
 from aiohttp import ClientSession
 from braevity.core.http import fetch
 from braevity.core.models import Job
-from braevity.sources.base import BaseSource
+from braevity.sources.base import BaseSource, BoardGoneError
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,15 @@ class SchemaOrgScraper:
     async def scrape_page(self, session: ClientSession, url: str) -> list[Job]:
         try:
             resp = await fetch(session, "GET", url, headers={"User-Agent": "braevity/0.1"})
-            if resp is None or resp.status != 200:
+            if resp is None:
+                return []
+            if resp.status == 404:
+                raise BoardGoneError(f"Schema.org page {url} returned 404")
+            if resp.status != 200:
                 return []
             html = await resp.text()
+        except BoardGoneError:
+            raise
         except Exception as e:
             logger.warning("Schema.org scrape failed for %s: %s", url, e)
             return []

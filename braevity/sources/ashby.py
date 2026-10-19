@@ -2,7 +2,7 @@ import logging
 from aiohttp import ClientSession
 from braevity.core.http import fetch
 from braevity.core.models import Job
-from braevity.sources.base import BaseSource
+from braevity.sources.base import BaseSource, BoardGoneError
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +48,18 @@ class AshbySource(BaseSource):
                 logger.warning("Ashby %s returned non-JSON", org)
                 return []
             data = await resp.json()
+        except BoardGoneError:
+            raise
         except Exception as e:
             logger.warning("Ashby %s failed: %s", org, e)
             return []
 
         if data.get("errors"):
+            # Ashby signals an unknown org via a GraphQL error on this
+            # shared endpoint, not an HTTP 404 — that's the real "board
+            # gone" signal here.
             logger.warning("Ashby %s GraphQL error: %s", org, data["errors"][0].get("message"))
-            return []
+            raise BoardGoneError(f"Ashby {org}: {data['errors'][0].get('message')}")
 
         postings = (
             data.get("data", {}).get("jobBoard", {}).get("jobPostings") or []

@@ -5,6 +5,13 @@ from aiohttp import ClientSession
 from braevity.core.models import Job
 
 
+class BoardGoneError(Exception):
+    """Raised by a source when it gets a definitive signal the board no
+    longer exists (404) — distinct from an empty-but-valid result or a
+    transient network/5xx/429 failure, so the scheduler can deactivate
+    the board instead of resetting its failure count on every poll."""
+
+
 class BaseSource(ABC):
     name: str
 

@@ -2,7 +2,7 @@ import logging
 from aiohttp import ClientSession
 from braevity.core.http import fetch
 from braevity.core.models import Job
-from braevity.sources.base import BaseSource
+from braevity.sources.base import BaseSource, BoardGoneError
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,8 @@ class BambooHRSource(BaseSource):
             resp = await fetch(session, "GET", url, headers=HEADERS)
             if resp is None:
                 return []
+            if resp.status == 404:
+                raise BoardGoneError(f"BambooHR {subdomain} returned 404")
             if resp.status != 200:
                 logger.warning("BambooHR %s returned %d", subdomain, resp.status)
                 return []
@@ -29,6 +31,8 @@ class BambooHRSource(BaseSource):
                 logger.warning("BambooHR %s returned non-JSON", subdomain)
                 return []
             data = await resp.json()
+        except BoardGoneError:
+            raise
         except Exception as e:
             logger.warning("BambooHR %s failed: %s", subdomain, e)
             return []
