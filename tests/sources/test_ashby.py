@@ -1,6 +1,8 @@
 import asyncio
 import json
+import pytest
 from unittest.mock import AsyncMock
+from braevity.sources.base import BoardGoneError
 from braevity.sources.ashby import AshbySource
 
 
@@ -43,10 +45,12 @@ def test_ashby_parses_jobs():
 
 
 def test_ashby_graphql_error():
+    """An unknown org on Ashby's shared endpoint signals via a GraphQL
+    error, not an HTTP 404 — that's the real "board gone" signal here."""
     source = AshbySource()
     api_data = {"errors": [{"message": "Not found"}]}
     session = AsyncMock()
     session.post = AsyncMock(return_value=_mock_response(api_data))
 
-    jobs = asyncio.run(source.fetch_jobs(session, {"name": "X", "org": "x"}))
-    assert jobs == []
+    with pytest.raises(BoardGoneError):
+        asyncio.run(source.fetch_jobs(session, {"name": "X", "org": "x"}))

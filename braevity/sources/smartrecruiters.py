@@ -2,7 +2,7 @@ import logging
 from aiohttp import ClientSession
 from braevity.core.http import fetch
 from braevity.core.models import Job
-from braevity.sources.base import BaseSource
+from braevity.sources.base import BaseSource, BoardGoneError
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,8 @@ class SmartRecruitersSource(BaseSource):
                 resp = await fetch(session, "GET", url)
                 if resp is None:
                     break
+                if resp.status == 404 and offset == 0:
+                    raise BoardGoneError(f"SmartRecruiters {slug} returned 404")
                 if resp.status != 200:
                     logger.warning("SmartRecruiters %s returned %d", slug, resp.status)
                     break
@@ -32,6 +34,8 @@ class SmartRecruitersSource(BaseSource):
                     logger.warning("SmartRecruiters %s returned non-JSON", slug)
                     break
                 data = await resp.json()
+            except BoardGoneError:
+                raise
             except Exception as e:
                 logger.warning("SmartRecruiters %s failed: %s", slug, e)
                 break

@@ -1,6 +1,8 @@
 import asyncio
 import json
+import pytest
 from unittest.mock import AsyncMock
+from braevity.sources.base import BoardGoneError
 from braevity.sources.workable import WorkableSource
 
 
@@ -54,11 +56,21 @@ def test_workable_empty_response():
 def test_workable_api_error_returns_empty():
     source = WorkableSource()
     session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response({}, status=403))
+
+    company = {"name": "Down", "slug": "down"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
+def test_workable_404_raises_board_gone():
+    source = WorkableSource()
+    session = AsyncMock()
     session.get = AsyncMock(return_value=_mock_response({}, status=404))
 
     company = {"name": "Gone", "slug": "gone"}
-    jobs = asyncio.run(source.fetch_jobs(session, company))
-    assert jobs == []
+    with pytest.raises(BoardGoneError):
+        asyncio.run(source.fetch_jobs(session, company))
 
 
 def test_workable_cloudflare_redirect_returns_empty():

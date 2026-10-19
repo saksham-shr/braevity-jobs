@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 from aiohttp import ClientSession
 from braevity.core.http import fetch
 from braevity.core.models import Job
-from braevity.sources.base import BaseSource
+from braevity.sources.base import BaseSource, BoardGoneError
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ class WorkdaySource(BaseSource):
                 )
                 if resp is None:
                     break
+                if resp.status == 404 and offset == 0:
+                    raise BoardGoneError(f"Workday {company.get('name', subdomain)} returned 404")
                 if resp.status != 200:
                     logger.warning("Workday %s returned %d", company.get("name", subdomain), resp.status)
                     break
@@ -64,6 +66,8 @@ class WorkdaySource(BaseSource):
                     logger.warning("Workday %s returned non-JSON", company.get("name", subdomain))
                     break
                 data = await resp.json()
+            except BoardGoneError:
+                raise
             except Exception as e:
                 logger.warning("Workday %s failed: %s", company.get("name", subdomain), e)
                 break

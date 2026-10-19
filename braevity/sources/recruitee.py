@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from aiohttp import ClientSession
 from braevity.core.http import fetch
 from braevity.core.models import Job
-from braevity.sources.base import BaseSource
+from braevity.sources.base import BaseSource, BoardGoneError
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,8 @@ class RecruiteeSource(BaseSource):
                     "(unauthenticated access ends 2027-02-10 per Recruitee docs)", slug,
                 )
                 return []
+            if resp.status == 404:
+                raise BoardGoneError(f"Recruitee {slug} returned 404")
             if resp.status != 200:
                 logger.warning("Recruitee %s returned %d", slug, resp.status)
                 return []
@@ -44,6 +46,8 @@ class RecruiteeSource(BaseSource):
                 logger.warning("Recruitee %s returned non-JSON", slug)
                 return []
             data = await resp.json()
+        except BoardGoneError:
+            raise
         except Exception as e:
             logger.warning("Recruitee %s failed: %s", slug, e)
             return []

@@ -1,4 +1,6 @@
+import json
 import sqlite3
+from dataclasses import asdict
 from pathlib import Path
 from braevity.core.models import Job
 
@@ -20,6 +22,11 @@ class DedupStore:
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS delivered_jobs ("
             "url TEXT, watch_role TEXT, delivered_at TEXT, "
+            "PRIMARY KEY(url, watch_role))"
+        )
+        self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS pending_delivery ("
+            "url TEXT, watch_role TEXT, job_json TEXT, created_at TEXT, "
             "PRIMARY KEY(url, watch_role))"
         )
         self._conn.commit()
@@ -68,6 +75,30 @@ class DedupStore:
         self._conn.executemany(
             "INSERT OR IGNORE INTO delivered_jobs (url, watch_role, delivered_at) VALUES (?, ?, ?)",
             [(j.url, watch_role, j.found_at) for j in jobs],
+        )
+        self._conn.commit()
+
+    def add_pending_batch(self, jobs: list[Job], watch_role: str) -> None:
+        """A job was already marked seen (fetch-dedup) but failed to export
+        or notify — persist it so a crash doesn't lose it permanently, since
+        it won't come back from a future fetch cycle once seen."""
+        self._conn.executemany(
+            "INSERT OR REPLACE INTO pending_delivery (url, watch_role, job_json, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            [(j.url, watch_role, json.dumps(asdict(j)), j.found_at) for j in jobs],
+        )
+        self._conn.commit()
+
+    def get_pending(self, watch_role: str) -> list[Job]:
+        rows = self._conn.execute(
+            "SELECT job_json FROM pending_delivery WHERE watch_role = ?", (watch_role,),
+        ).fetchall()
+        return [Job(**json.loads(row[0])) for row in rows]
+
+    def clear_pending_batch(self, jobs: list[Job], watch_role: str) -> None:
+        self._conn.executemany(
+            "DELETE FROM pending_delivery WHERE url = ? AND watch_role = ?",
+            [(j.url, watch_role) for j in jobs],
         )
         self._conn.commit()
 

@@ -1,6 +1,8 @@
 import asyncio
 import json
+import pytest
 from unittest.mock import AsyncMock
+from braevity.sources.base import BoardGoneError
 from braevity.sources.bamboohr import BambooHRSource
 
 
@@ -53,8 +55,18 @@ def test_bamboohr_empty_response():
 def test_bamboohr_api_error_returns_empty():
     source = BambooHRSource()
     session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response({}, status=403))
+
+    company = {"name": "Down", "subdomain": "down"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
+def test_bamboohr_404_raises_board_gone():
+    source = BambooHRSource()
+    session = AsyncMock()
     session.get = AsyncMock(return_value=_mock_response({}, status=404))
 
     company = {"name": "Gone", "subdomain": "gone"}
-    jobs = asyncio.run(source.fetch_jobs(session, company))
-    assert jobs == []
+    with pytest.raises(BoardGoneError):
+        asyncio.run(source.fetch_jobs(session, company))

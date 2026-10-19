@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from aiohttp import ClientSession
 from braevity.core.http import fetch
 from braevity.core.models import Job
-from braevity.sources.base import BaseSource
+from braevity.sources.base import BaseSource, BoardGoneError
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,8 @@ class LeverSource(BaseSource):
             resp = await fetch(session, "GET", url)
             if resp is None:
                 return []
+            if resp.status == 404:
+                raise BoardGoneError(f"Lever {org} returned 404")
             if resp.status != 200:
                 logger.warning("Lever %s returned %d", org, resp.status)
                 return []
@@ -27,6 +29,8 @@ class LeverSource(BaseSource):
                 logger.warning("Lever %s returned non-JSON", org)
                 return []
             data = await resp.json()
+        except BoardGoneError:
+            raise
         except Exception as e:
             logger.warning("Lever %s failed: %s", org, e)
             return []

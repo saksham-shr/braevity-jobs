@@ -1,6 +1,8 @@
 import asyncio
 import json
+import pytest
 from unittest.mock import AsyncMock
+from braevity.sources.base import BoardGoneError
 from braevity.sources.greenhouse import GreenhouseSource
 
 
@@ -57,11 +59,21 @@ def test_greenhouse_empty_response():
 def test_greenhouse_api_error_returns_empty():
     source = GreenhouseSource()
     session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response({}, status=403))
+
+    company = {"name": "Down", "board_token": "down"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
+def test_greenhouse_404_raises_board_gone():
+    source = GreenhouseSource()
+    session = AsyncMock()
     session.get = AsyncMock(return_value=_mock_response({}, status=404))
 
     company = {"name": "Gone", "board_token": "gone"}
-    jobs = asyncio.run(source.fetch_jobs(session, company))
-    assert jobs == []
+    with pytest.raises(BoardGoneError):
+        asyncio.run(source.fetch_jobs(session, company))
 
 
 def test_greenhouse_html_error_page_returns_empty():

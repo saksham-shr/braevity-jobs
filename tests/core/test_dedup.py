@@ -64,11 +64,30 @@ def test_is_duplicate_content_cross_source(tmp_path):
         url="https://greenhouse.io/acme/1", posted_date=None, source="greenhouse",
     )
     job2 = Job.from_fields(
-        title="SDE", company="Acme", location="Remote",
+        title="SDE", company="Acme", location="NYC",
         url="https://remoteok.com/jobs/sde-acme", posted_date=None, source="remoteok",
     )
     store.mark_seen(job1)
     assert store.is_duplicate_content(job2) is True
+    store.close()
+
+
+def test_is_duplicate_content_cross_source_different_location_not_duplicate(tmp_path):
+    """A conservative rule on purpose: a mismatched location string (e.g.
+    an aggregator saying "Remote" for a job the source ATS lists as "NYC")
+    is treated as a distinct job rather than guessed as the same posting —
+    missing a dedupe is cheaper than dropping a real one (issue #30 review)."""
+    store = DedupStore(tmp_path / "test.db")
+    job1 = Job.from_fields(
+        title="SDE", company="Acme", location="NYC",
+        url="https://greenhouse.io/acme/1", posted_date=None, source="greenhouse",
+    )
+    job2 = Job.from_fields(
+        title="SDE", company="Acme", location="Remote",
+        url="https://remoteok.com/jobs/sde-acme", posted_date=None, source="remoteok",
+    )
+    store.mark_seen(job1)
+    assert store.is_duplicate_content(job2) is False
     store.close()
 
 

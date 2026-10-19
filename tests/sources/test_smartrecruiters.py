@@ -1,6 +1,8 @@
 import asyncio
 import json
+import pytest
 from unittest.mock import AsyncMock
+from braevity.sources.base import BoardGoneError
 from braevity.sources.smartrecruiters import SmartRecruitersSource
 
 
@@ -65,8 +67,18 @@ def test_smartrecruiters_empty_response():
 def test_smartrecruiters_api_error_returns_empty():
     source = SmartRecruitersSource()
     session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response({}, status=403))
+
+    company = {"name": "Down", "slug": "down"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
+def test_smartrecruiters_404_on_first_page_raises_board_gone():
+    source = SmartRecruitersSource()
+    session = AsyncMock()
     session.get = AsyncMock(return_value=_mock_response({}, status=404))
 
     company = {"name": "Gone", "slug": "gone"}
-    jobs = asyncio.run(source.fetch_jobs(session, company))
-    assert jobs == []
+    with pytest.raises(BoardGoneError):
+        asyncio.run(source.fetch_jobs(session, company))
