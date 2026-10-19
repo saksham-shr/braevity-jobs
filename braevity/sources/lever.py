@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from aiohttp import ClientSession
+from braevity.core.http import fetch
 from braevity.core.models import Job
 from braevity.sources.base import BaseSource
 
@@ -16,7 +17,9 @@ class LeverSource(BaseSource):
         org = company.get("org") or company.get("token", "")
         url = LEVER_API.format(org=org)
         try:
-            resp = await session.get(url)
+            resp = await fetch(session, "GET", url)
+            if resp is None:
+                return []
             if resp.status != 200:
                 logger.warning("Lever %s returned %d", org, resp.status)
                 return []

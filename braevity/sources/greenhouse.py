@@ -1,5 +1,6 @@
 import logging
 from aiohttp import ClientSession
+from braevity.core.http import fetch
 from braevity.core.models import Job
 from braevity.sources.base import BaseSource
 
@@ -15,7 +16,9 @@ class GreenhouseSource(BaseSource):
         token = company.get("board_token") or company.get("token", "")
         url = GREENHOUSE_API.format(token=token)
         try:
-            resp = await session.get(url)
+            resp = await fetch(session, "GET", url)
+            if resp is None:
+                return []
             if resp.status != 200:
                 logger.warning("Greenhouse %s returned %d", token, resp.status)
                 return []

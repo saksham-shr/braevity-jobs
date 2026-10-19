@@ -1,6 +1,7 @@
 import logging
 from urllib.parse import urlparse
 from aiohttp import ClientSession
+from braevity.core.http import fetch
 from braevity.core.models import Job
 from braevity.sources.base import BaseSource
 
@@ -49,11 +50,13 @@ class WorkdaySource(BaseSource):
 
         for _ in range(MAX_PAGES):
             try:
-                resp = await session.post(
-                    cxs_url,
+                resp = await fetch(
+                    session, "POST", cxs_url,
                     json={"appliedFacets": {}, "limit": PAGE_SIZE, "offset": offset, "searchText": ""},
                     headers={"Accept": "application/json", "Content-Type": "application/json"},
                 )
+                if resp is None:
+                    break
                 if resp.status != 200:
                     logger.warning("Workday %s returned %d", company.get("name", subdomain), resp.status)
                     break
