@@ -10,6 +10,17 @@ logger = logging.getLogger(__name__)
 PERSONIO_API = "https://{slug}.jobs.personio.com/xml"
 
 
+def _local_tag(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _find_text(elem: ET.Element, name: str) -> str:
+    for child in elem:
+        if _local_tag(child.tag) == name:
+            return (child.text or "").strip()
+    return ""
+
+
 class PersonioSource(BaseSource):
     name = "personio"
 
@@ -34,18 +45,20 @@ class PersonioSource(BaseSource):
             return []
 
         jobs = []
-        for position in root.findall("position"):
-            job_id = (position.findtext("id") or "").strip()
+        for position in root.iter():
+            if _local_tag(position.tag) != "position":
+                continue
+            job_id = _find_text(position, "id")
             if not job_id:
                 continue
 
             jobs.append(Job.from_fields(
-                title=(position.findtext("name") or "").strip() or "Untitled",
+                title=_find_text(position, "name") or "Untitled",
                 company=company.get("name") or company.get("company_name") or slug,
-                location=(position.findtext("office") or "").strip() or None,
+                location=_find_text(position, "office") or None,
                 url=f"https://{slug}.jobs.personio.com/job/{job_id}",
-                posted_date=(position.findtext("createdAt") or "").strip() or None,
+                posted_date=_find_text(position, "createdAt") or None,
                 source=self.name,
-                employment_type=(position.findtext("employmentType") or "").strip() or None,
+                employment_type=_find_text(position, "employmentType") or None,
             ))
         return jobs

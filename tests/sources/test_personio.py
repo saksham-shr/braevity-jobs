@@ -51,6 +51,33 @@ def test_personio_parses_positions():
     assert jobs[0].source == "personio"
 
 
+NAMESPACED_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<workzag-jobs xmlns="https://www.personio.com/xml/job">
+<position>
+    <id>555</id>
+    <office>Berlin</office>
+    <name>NAMESPACED ROLE</name>
+    <employmentType>permanent</employmentType>
+    <createdAt>2026-02-01T00:00:00+00:00</createdAt>
+</position>
+</workzag-jobs>
+"""
+
+
+def test_personio_parses_namespaced_positions():
+    source = PersonioSource()
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response(NAMESPACED_XML))
+
+    company = {"name": "NSCo", "slug": "nsco"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+
+    assert len(jobs) == 1
+    assert jobs[0].title == "NAMESPACED ROLE"
+    assert jobs[0].location == "Berlin"
+    assert jobs[0].url == "https://nsco.jobs.personio.com/job/555"
+
+
 def test_personio_skips_position_without_id():
     source = PersonioSource()
     xml = """<?xml version="1.0"?><workzag-jobs><position><name>No ID</name></position></workzag-jobs>"""
