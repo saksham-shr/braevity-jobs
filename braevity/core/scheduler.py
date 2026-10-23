@@ -21,6 +21,7 @@ from braevity.sources.bamboohr import BambooHRSource
 from braevity.sources.recruitee import RecruiteeSource
 from braevity.sources.breezyhr import BreezyHRSource
 from braevity.sources.teamtailor import TeamtailorSource
+from braevity.sources.personio import PersonioSource
 from braevity.sources.schema_org import SchemaOrgSource
 from braevity.sources.remoteok import RemoteOKSource
 from braevity.sources.jobicy import JobicySource
@@ -40,6 +41,7 @@ ATS_SOURCES = {
     "recruitee": RecruiteeSource,
     "breezyhr": BreezyHRSource,
     "teamtailor": TeamtailorSource,
+    "personio": PersonioSource,
     "schema_org": SchemaOrgSource,
 }
 
@@ -61,6 +63,7 @@ ATS_LIMITS = {
     "recruitee": 5,
     "breezyhr": 5,
     "teamtailor": 5,
+    "personio": 5,
     "schema_org": 3,
 }
 
@@ -79,6 +82,7 @@ ATS_KEY_MAP = {
     "recruitee": "slug",
     "breezyhr": "slug",
     "teamtailor": "slug",
+    "personio": "slug",
     "schema_org": "url",
 }
 
