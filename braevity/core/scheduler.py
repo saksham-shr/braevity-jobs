@@ -146,7 +146,7 @@ def _ensure_registry(registry_path: Path) -> BoardRegistry:
     registry = BoardRegistry(registry_path)
     if registry.board_count() == 0:
         migrate_catalog(registry)
-        seed_registry(registry)
+    seed_registry(registry)
     return registry
 
 
