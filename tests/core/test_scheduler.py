@@ -44,7 +44,8 @@ def test_slow_cycle_empty_results_not_failure(tmp_path):
     fake_source.return_value = fake_source
     fake_source.fetch_jobs = AsyncMock(return_value=[])
 
-    with patch.dict("braevity.core.scheduler.ATS_SOURCES", {"greenhouse": fake_source}):
+    with patch.dict("braevity.core.scheduler.ATS_SOURCES", {"greenhouse": fake_source}), \
+         patch("braevity.core.scheduler.seed_registry", return_value=0):
         count, jobs = asyncio.run(run_slow_cycle({}, db_path, reg_path))
 
     assert count == 0
@@ -177,7 +178,8 @@ def test_board_gone_error_deactivates_after_three_terminal_failures(tmp_path):
 
     db_path = tmp_path / "seen.db"
     with patch.dict("braevity.core.scheduler.ATS_SOURCES", {"greenhouse": fake_source}, clear=True), \
-         patch.dict("braevity.core.scheduler.ATS_LIMITS", {"greenhouse": 5}, clear=True):
+         patch.dict("braevity.core.scheduler.ATS_LIMITS", {"greenhouse": 5}, clear=True), \
+         patch("braevity.core.scheduler.seed_registry", return_value=0):
         asyncio.run(run_slow_cycle({}, db_path, reg_path))
         asyncio.run(run_slow_cycle({}, db_path, reg_path))
         registry = BoardRegistry(reg_path)
@@ -204,7 +206,8 @@ def test_generic_exception_does_not_deactivate_board(tmp_path):
 
     db_path = tmp_path / "seen.db"
     with patch.dict("braevity.core.scheduler.ATS_SOURCES", {"greenhouse": fake_source}, clear=True), \
-         patch.dict("braevity.core.scheduler.ATS_LIMITS", {"greenhouse": 5}, clear=True):
+         patch.dict("braevity.core.scheduler.ATS_LIMITS", {"greenhouse": 5}, clear=True), \
+         patch("braevity.core.scheduler.seed_registry", return_value=0):
         for _ in range(5):
             asyncio.run(run_slow_cycle({}, db_path, reg_path))
 
