@@ -36,9 +36,19 @@ class TeamtailorSource(BaseSource):
             logger.warning("Teamtailor %s failed: %s", slug, e)
             return []
 
+        if not isinstance(data, dict):
+            logger.warning("Teamtailor %s returned unexpected payload shape", slug)
+            return []
+        items = data.get("items", [])
+        if not isinstance(items, list):
+            logger.warning("Teamtailor %s items field is not a list", slug)
+            return []
+
         scraper = SchemaOrgScraper()
         jobs = []
-        for item in data.get("items", []):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
             job_url = (item.get("url") or "").strip()
             if not job_url:
                 continue

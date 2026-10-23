@@ -110,6 +110,36 @@ def test_teamtailor_api_error_returns_empty():
     assert jobs == []
 
 
+def test_teamtailor_non_dict_payload_returns_empty():
+    source = TeamtailorSource()
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response(["unexpected", "list"]))
+
+    company = {"name": "Weird", "slug": "weird"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
+def test_teamtailor_non_list_items_returns_empty():
+    source = TeamtailorSource()
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response({"items": "not-a-list"}))
+
+    company = {"name": "Weird", "slug": "weird"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
+def test_teamtailor_non_dict_item_is_skipped():
+    source = TeamtailorSource()
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=_mock_response({"items": ["not-a-dict"]}))
+
+    company = {"name": "Weird", "slug": "weird"}
+    jobs = asyncio.run(source.fetch_jobs(session, company))
+    assert jobs == []
+
+
 def test_teamtailor_404_raises_board_gone():
     source = TeamtailorSource()
     session = AsyncMock()
